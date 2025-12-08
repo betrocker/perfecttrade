@@ -7,6 +7,8 @@ type ChecklistTab = 'default' | 'custom';
 
 export default function ChecklistScreen() {
     const [activeTab, setActiveTab] = useState<ChecklistTab>('default');
+    const [checkedItems, setCheckedItems] = useState<any[]>([]);
+
 
     return (
         <View className="flex-1 bg-bg-primary">

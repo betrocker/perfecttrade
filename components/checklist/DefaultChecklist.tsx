@@ -1,8 +1,7 @@
-import { View, Text, TouchableOpacity, ScrollView, Alert, Animated, Modal } from 'react-native';
-import { useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Alert, Animated } from 'react-native';
+import { useState, useRef, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import SaveTradeModal from '@/components/trade/SaveTradeModal';
-
 
 type ChecklistItem = {
     id: string;
@@ -14,7 +13,6 @@ type ChecklistItem = {
 
 type Timeframe = 'weekly' | 'daily' | '4h' | '2h1h30m' | 'entry';
 
-// Definicije za svaki timeframe
 // WEEKLY ITEMS
 const WEEKLY_ITEMS: ChecklistItem[] = [
     {
@@ -153,7 +151,6 @@ const FOURHOUR_ITEMS: ChecklistItem[] = [
     },
 ];
 
-
 // 2H, 1H, 30m ITEMS
 const TWOHOUR_ITEMS: ChecklistItem[] = [
     {
@@ -192,7 +189,6 @@ const ENTRY_ITEMS: ChecklistItem[] = [
     },
 ];
 
-
 const TIMEFRAME_DATA = {
     weekly: { items: WEEKLY_ITEMS, label: 'WEEKLY' },
     daily: { items: DAILY_ITEMS, label: 'DAILY' },
@@ -201,7 +197,6 @@ const TIMEFRAME_DATA = {
     entry: { items: ENTRY_ITEMS, label: 'ENTRY' },
 };
 
-// Funkcija za određivanje kategorije setup-a
 const getSetupCategory = (percentage: number): { label: string; color: string } => {
     if (percentage <= 30) return { label: 'Weak Setup', color: '#EF4444' };
     if (percentage <= 55) return { label: 'Below Standard', color: '#F59E0B' };
@@ -220,6 +215,75 @@ export default function DefaultChecklist() {
     const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
     const fadeAnim = useRef(new Animated.Value(1)).current;
     const [modalVisible, setModalVisible] = useState(false);
+    const [confluenceItemsData, setConfluenceItemsData] = useState<any[]>([]);
+
+    const [showLeftArrow, setShowLeftArrow] = useState(false);
+    const [showRightArrow, setShowRightArrow] = useState(true);
+    const [showLeftArrowTabs, setShowLeftArrowTabs] = useState(false);
+    const [showRightArrowTabs, setShowRightArrowTabs] = useState(true);
+
+    // Track checked items and convert to confluence data
+    useEffect(() => {
+        const items: any[] = [];
+
+        WEEKLY_ITEMS.forEach(item => {
+            if (checkedItems.has(item.id)) {
+                items.push({
+                    timeframe: 'Weekly',
+                    label: item.label,
+                    weight: item.percentage,
+                    checked: true
+                });
+            }
+        });
+
+        DAILY_ITEMS.forEach(item => {
+            if (checkedItems.has(item.id)) {
+                items.push({
+                    timeframe: 'Daily',
+                    label: item.label,
+                    weight: item.percentage,
+                    checked: true
+                });
+            }
+        });
+
+        FOURHOUR_ITEMS.forEach(item => {
+            if (checkedItems.has(item.id)) {
+                items.push({
+                    timeframe: '4H',
+                    label: item.label,
+                    weight: item.percentage,
+                    checked: true
+                });
+            }
+        });
+
+        TWOHOUR_ITEMS.forEach(item => {
+            if (checkedItems.has(item.id)) {
+                items.push({
+                    timeframe: '2H/1H/30m',
+                    label: item.label,
+                    weight: item.percentage,
+                    checked: true
+                });
+            }
+        });
+
+        ENTRY_ITEMS.forEach(item => {
+            if (checkedItems.has(item.id)) {
+                items.push({
+                    timeframe: 'Entry',
+                    label: item.label,
+                    weight: item.percentage,
+                    checked: true
+                });
+            }
+        });
+
+        setConfluenceItemsData(items);
+        console.log('✅ Confluence items updated:', items.length);
+    }, [checkedItems]);
 
     const handleTimeframeChange = (timeframe: Timeframe) => {
         if (timeframe === selectedTimeframe) return;
@@ -254,14 +318,12 @@ export default function DefaultChecklist() {
         }
     };
 
-    // Izračunaj procenat za svaki timeframe
     const getTimeframePercentage = (timeframe: Timeframe) => {
         return TIMEFRAME_DATA[timeframe].items.reduce((sum, item) => {
             return checkedItems.has(item.id) ? sum + item.percentage : sum;
         }, 0);
     };
 
-    // Overall percentage
     const allItems = [...WEEKLY_ITEMS, ...DAILY_ITEMS, ...FOURHOUR_ITEMS, ...TWOHOUR_ITEMS, ...ENTRY_ITEMS];
     const overallPercentage = allItems.reduce((sum, item) => {
         return checkedItems.has(item.id) ? sum + item.percentage : sum;
@@ -269,11 +331,6 @@ export default function DefaultChecklist() {
 
     const setupCategory = getSetupCategory(overallPercentage);
     const currentData = TIMEFRAME_DATA[selectedTimeframe];
-
-    const [showLeftArrow, setShowLeftArrow] = useState(false);
-    const [showRightArrow, setShowRightArrow] = useState(true);
-    const [showLeftArrowTabs, setShowLeftArrowTabs] = useState(false);
-    const [showRightArrowTabs, setShowRightArrowTabs] = useState(true);
 
     const handleScroll = (event: any) => {
         const scrollX = event.nativeEvent.contentOffset.x;
@@ -292,7 +349,6 @@ export default function DefaultChecklist() {
         setShowLeftArrowTabs(scrollX > 10);
         setShowRightArrowTabs(scrollX < contentWidth - layoutWidth - 10);
     };
-
 
     return (
         <View className="flex-1 bg-bg-primary">
@@ -345,7 +401,6 @@ export default function DefaultChecklist() {
                         })}
                     </ScrollView>
 
-                    {/* Left Arrow */}
                     {showLeftArrowTabs && (
                         <View
                             style={{
@@ -373,16 +428,11 @@ export default function DefaultChecklist() {
                                     elevation: 5,
                                 }}
                             >
-                                <Ionicons
-                                    name="chevron-back"
-                                    size={18}
-                                    color="#00F5D4"
-                                />
+                                <Ionicons name="chevron-back" size={18} color="#00F5D4" />
                             </View>
                         </View>
                     )}
 
-                    {/* Right Arrow */}
                     {showRightArrowTabs && (
                         <View
                             style={{
@@ -410,27 +460,21 @@ export default function DefaultChecklist() {
                                     elevation: 5,
                                 }}
                             >
-                                <Ionicons
-                                    name="chevron-forward"
-                                    size={18}
-                                    color="#00F5D4"
-                                />
+                                <Ionicons name="chevron-forward" size={18} color="#00F5D4" />
                             </View>
                         </View>
                     )}
                 </View>
             </View>
 
-            {/* Content Area - SVE U SCROLL-u */}
+            {/* Content Area */}
             <ScrollView
                 className="flex-1"
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 110 }}
             >
-                {/* Items sa animacijom */}
                 <Animated.View style={{ opacity: fadeAnim }}>
                     <View className="px-3 pb-3">
-                        {/* Items */}
                         {currentData.items.map((item) => {
                             const isChecked = checkedItems.has(item.id);
                             return (
@@ -469,13 +513,12 @@ export default function DefaultChecklist() {
                     </View>
                 </Animated.View>
 
-                {/* Confluence Summary - U BOXU */}
+                {/* Confluence Summary */}
                 <View className="mx-3 mt-2 mb-2 bg-bg-secondary rounded-xl p-4 border border-border">
                     <Text className="text-txt-secondary text-center text-xs font-semibold mb-3 tracking-wider">
                         CONFLUENCE SUMMARY
                     </Text>
 
-                    {/* Horizontal Scroll Container */}
                     <View style={{ position: 'relative' }}>
                         <ScrollView
                             horizontal
@@ -507,7 +550,6 @@ export default function DefaultChecklist() {
                             })}
                         </ScrollView>
 
-                        {/* Left Arrow */}
                         {showLeftArrow && (
                             <View
                                 style={{
@@ -540,7 +582,6 @@ export default function DefaultChecklist() {
                             </View>
                         )}
 
-                        {/* Right Arrow */}
                         {showRightArrow && (
                             <View
                                 style={{
@@ -574,7 +615,7 @@ export default function DefaultChecklist() {
                         )}
                     </View>
 
-                    {/* Overall Score - UNUTAR ISTOG BOXA */}
+                    {/* Overall Score */}
                     <View
                         className="rounded-xl p-3 mt-4 border"
                         style={{
@@ -617,12 +658,13 @@ export default function DefaultChecklist() {
                 </View>
             </ScrollView>
 
-            {/* Modal */}
+            {/* Save Trade Modal */}
             <SaveTradeModal
                 visible={modalVisible}
                 onClose={() => setModalVisible(false)}
                 confluenceScore={overallPercentage}
                 confluenceColor={setupCategory.color}
+                checkedItems={confluenceItemsData}
             />
         </View>
     );

@@ -1,19 +1,20 @@
-import { View, Text, TouchableOpacity, ScrollView, Alert, Modal, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import {useEffect, useState} from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { ActivityIndicator } from 'react-native';
-
+import { useChecklist } from '@/context/ChecklistContext';
 
 type SaveTradeModalProps = {
     visible: boolean;
     onClose: () => void;
     confluenceScore: number;
     confluenceColor: string;
+    checkedItems: any[]; // ← DODAJ OVO
 };
 
-export default function SaveTradeModal({ visible, onClose, confluenceScore, confluenceColor }: SaveTradeModalProps) {
+export default function SaveTradeModal({ visible, onClose, confluenceScore, confluenceColor, checkedItems }: SaveTradeModalProps) {
     const [currencyPair, setCurrencyPair] = useState('');
     const [direction, setDirection] = useState<'LONG' | 'SHORT'>('LONG');
     const [accountBalance, setAccountBalance] = useState('10000');
@@ -26,49 +27,29 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
     const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
     const [stopLossPips, setStopLossPips] = useState('');
     const [saving, setSaving] = useState(false);
-
+    const { getConfluenceData } = useChecklist();
 
     const currencyPairs = [
-        // Majors
         'EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD', 'NZD/USD',
-        // Crosses
         'EUR/GBP', 'EUR/JPY', 'EUR/CHF', 'EUR/AUD', 'EUR/CAD', 'EUR/NZD',
         'GBP/JPY', 'GBP/CHF', 'GBP/AUD', 'GBP/CAD', 'GBP/NZD',
         'AUD/JPY', 'AUD/NZD', 'AUD/CAD', 'AUD/CHF',
         'NZD/JPY', 'NZD/CAD', 'NZD/CHF',
         'CAD/JPY', 'CAD/CHF',
         'CHF/JPY',
-        // Exotics
         'USD/TRY', 'USD/ZAR', 'USD/MXN', 'EUR/TRY', 'GBP/TRY',
     ];
 
-    // Funkcija za dobijanje pip vrednosti po paru (za 1 standard lot)
     const getPipValue = (pair: string): number => {
-        // Za većinu USD quote parova (EUR/USD, GBP/USD, etc.)
-        if (pair.endsWith('USD')) {
-            return 10; // $10 per pip for 1 standard lot
-        }
-
-        // Za JPY parove
-        if (pair.includes('JPY')) {
-            return 10; // Približno, može varirati
-        }
-
-        // Za ostale cross parove (aproksimacija)
-        if (pair.startsWith('EUR')) {
-            return 10;
-        } else if (pair.startsWith('GBP')) {
-            return 10;
-        } else if (pair.startsWith('AUD')) {
-            return 10;
-        } else if (pair.startsWith('NZD')) {
-            return 10;
-        }
-
-        return 10; // Default fallback
+        if (pair.endsWith('USD')) return 10;
+        if (pair.includes('JPY')) return 10;
+        if (pair.startsWith('EUR')) return 10;
+        if (pair.startsWith('GBP')) return 10;
+        if (pair.startsWith('AUD')) return 10;
+        if (pair.startsWith('NZD')) return 10;
+        return 10;
     };
 
-// Poboljšana calculate funkcija
     const calculateLotSize = () => {
         const balance = parseFloat(accountBalance);
         const risk = parseFloat(riskPercentage);
@@ -82,22 +63,14 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
             return 'Select currency pair first';
         }
 
-        // Calculate risk amount in USD
         const riskAmountUSD = (balance * risk) / 100;
-
-        // Get pip value for selected currency pair
         const pipValue = getPipValue(currencyPair);
-
-        // Formula: Lot Size = Risk Amount / (Stop Loss in Pips × Pip Value per Standard Lot)
         const standardLots = riskAmountUSD / (stopLoss * pipValue);
 
-        // Format output based on lot size
         if (standardLots < 0.01) {
-            // Micro lots (1000 units)
             const microLots = Math.round(standardLots * 1000);
             return `${microLots} micro lots (${standardLots.toFixed(4)} lots)`;
         } else if (standardLots < 0.1) {
-            // Mini lots (10,000 units)
             return `${(standardLots * 100).toFixed(2)} mini lots (${standardLots.toFixed(3)} lots)`;
         } else if (standardLots < 1) {
             return `${standardLots.toFixed(3)} lots`;
@@ -106,30 +79,22 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
         }
     };
 
-
-// Auto-calculate when dependencies change
     useEffect(() => {
         if (accountBalance && riskPercentage && stopLossPips) {
-            // Force re-render to show updated calculation
-            const timer = setTimeout(() => {
-                // This will trigger component re-render
-            }, 100);
+            const timer = setTimeout(() => {}, 100);
             return () => clearTimeout(timer);
         }
     }, [accountBalance, riskPercentage, stopLossPips]);
-
 
     const pickImage = async (useCamera: boolean = false) => {
         let result;
 
         if (useCamera) {
             const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-
             if (!permissionResult.granted) {
                 Alert.alert('Permission Required', 'Please allow camera access');
                 return;
             }
-
             result = await ImagePicker.launchCameraAsync({
                 allowsEditing: true,
                 aspect: [16, 9],
@@ -137,12 +102,10 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
             });
         } else {
             const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
             if (!permissionResult.granted) {
                 Alert.alert('Permission Required', 'Please allow access to your photos');
                 return;
             }
-
             result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ['images'],
                 allowsEditing: true,
@@ -156,42 +119,74 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
         }
     };
 
-    const uploadChartImage = async (uri: string, userId: string, tradeId: string): Promise<string | null> => {
+    const uploadChartImage = async (imageUri: string) => {
         try {
-            // Convert URI to blob
-            const response = await fetch(uri);
-            const blob = await response.blob();
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-            // Generate unique filename
-            const fileExt = uri.split('.').pop();
-            const fileName = `${userId}/${tradeId}.${fileExt}`;
+            if (authError || !user) {
+                console.error('❌ Auth error or no user');
+                return null;
+            }
 
-            // Upload to Supabase Storage
+            const fileExt = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+            const filePath = `${user.id}/${fileName}`;
+
+            console.log('📤 Uploading to:', filePath);
+            console.log('📍 From URI:', imageUri);
+
+            // Fetch image as arrayBuffer (bolje za React Native)
+            const response = await fetch(imageUri);
+            if (!response.ok) {
+                console.error('❌ Fetch failed:', response.status);
+                return null;
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+            console.log('📦 ArrayBuffer size:', arrayBuffer.byteLength);
+
+            if (arrayBuffer.byteLength === 0) {
+                console.error('❌ Empty ArrayBuffer');
+                return null;
+            }
+
+            // Upload using arrayBuffer
             const { data, error } = await supabase.storage
                 .from('trade-charts')
-                .upload(fileName, blob, {
-                    contentType: `image/${fileExt}`,
-                    upsert: true,
+                .upload(filePath, arrayBuffer, {
+                    contentType: 'image/jpeg',
+                    cacheControl: '3600',
+                    upsert: false
                 });
 
-            if (error) throw error;
+            if (error) {
+                console.error('❌ Upload error:', error);
+                return null;
+            }
+
+            console.log('✅ Upload success:', data);
 
             // Get public URL
             const { data: urlData } = supabase.storage
                 .from('trade-charts')
-                .getPublicUrl(fileName);
+                .getPublicUrl(filePath);
 
+            console.log('🔗 Public URL:', urlData.publicUrl);
             return urlData.publicUrl;
-        } catch (error) {
-            console.error('Error uploading image:', error);
+        } catch (error: any) {
+            console.error('💥 Upload error:', error);
             return null;
         }
     };
 
 
     const handleSave = async () => {
-        setSaving(true);
-        // Validation
+        const confluenceItems = getConfluenceData();
+        const confluenceData = {
+            score: confluenceScore,
+            timestamp: new Date().toISOString(),
+            items: confluenceItems
+        };
         if (!currencyPair) {
             Alert.alert('Error', 'Please select a currency pair');
             return;
@@ -205,18 +200,33 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
             return;
         }
 
+        setSaving(true);
+
         try {
-            // Get current user
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
                 Alert.alert('Error', 'You must be logged in to save trades');
+                setSaving(false);
                 return;
             }
 
-            // Calculate lot size for storage
+            let chartImageUrl = null;
+            if (chartImage) {
+                console.log('🖼️ Uploading chart image...');
+                chartImageUrl = await uploadChartImage(chartImage);
+            }
+
             const lotSize = calculateLotSize();
 
-            // Insert trade into database
+            // ← KORISTI checkedItems
+            const confluenceData = {
+                score: confluenceScore,
+                timestamp: new Date().toISOString(),
+                items: checkedItems // ← OVO JE KLJUČNO
+            };
+
+            console.log('💾 Saving confluence data:', confluenceData);
+
             const { data: trade, error: tradeError } = await supabase
                 .from('trades')
                 .insert([
@@ -232,8 +242,10 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
                         stop_loss_price: stopLossPrice ? parseFloat(stopLossPrice) : null,
                         take_profit_price: takeProfitPrice ? parseFloat(takeProfitPrice) : null,
                         confluence_score: confluenceScore,
+                        confluence_data: confluenceData, // ← ČUVA SVE ITEMS
                         notes: notes || null,
                         status: 'PLANNED',
+                        chart_image_url: chartImageUrl,
                     },
                 ])
                 .select()
@@ -241,53 +253,30 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
 
             if (tradeError) throw tradeError;
 
-            // Upload chart image if exists
-            if (chartImage && trade) {
-                const imageUrl = await uploadChartImage(chartImage, user.id, trade.id);
-
-                if (imageUrl) {
-                    // Update trade with image URL
-                    const { error: updateError } = await supabase
-                        .from('trades')
-                        .update({ chart_image_url: imageUrl })
-                        .eq('id', trade.id);
-
-                    if (updateError) console.error('Error updating image URL:', updateError);
-                }
-            }
-
-            // Success!
-            Alert.alert(
-                'Success! 🎉',
-                'Your trade has been saved successfully. You can view it in the Journal tab.',
-                [
-                    {
-                        text: 'OK',
-                        onPress: () => {
-                            onClose();
-                            // Reset form
-                            setCurrencyPair('');
-                            setDirection('LONG');
-                            setStopLossPips('');
-                            setRiskPercentage('2');
-                            setEntryPrice('');
-                            setStopLossPrice('');
-                            setTakeProfitPrice('');
-                            setNotes('');
-                            setChartImage(null);
-                        },
+            Alert.alert('Success! 🎉', 'Your trade has been saved successfully.', [
+                {
+                    text: 'OK',
+                    onPress: () => {
+                        onClose();
+                        setCurrencyPair('');
+                        setDirection('LONG');
+                        setStopLossPips('');
+                        setRiskPercentage('2');
+                        setEntryPrice('');
+                        setStopLossPrice('');
+                        setTakeProfitPrice('');
+                        setNotes('');
+                        setChartImage(null);
                     },
-                ]
-            );
-        } catch (error) {
-            console.error('Error saving trade:', error);
+                },
+            ]);
+        } catch (error: any) {
+            console.error('❌ Save error:', error);
             Alert.alert('Error', 'Failed to save trade. Please try again.');
+        } finally {
             setSaving(false);
         }
-        setSaving(false);
     };
-
-
 
     return (
         <Modal
@@ -318,7 +307,6 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
                             </TouchableOpacity>
                         </View>
 
-                        {/* Content - ScrollView */}
                         <ScrollView
                             className="flex-1"
                             contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
@@ -377,7 +365,6 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
                                 )}
                             </View>
 
-
                             {/* Direction */}
                             <View className="mb-4">
                                 <Text className="text-txt-primary text-base font-semibold mb-2">
@@ -418,19 +405,14 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
                                 </View>
                             </View>
 
-
                             {/* Account Balance */}
                             <View className="mb-4">
                                 <View className="flex-row items-center mb-2">
                                     <Ionicons name="wallet-outline" size={20} color="#00F5D4" />
                                     <Text className="text-txt-primary text-base font-semibold ml-2">
-                                        Account Balance
+                                        Account Balance <Text className="text-red-500">*</Text>
                                     </Text>
-                                    <Text className="text-red-500 ml-1">*Required</Text>
                                 </View>
-                                <Text className="text-txt-secondary text-sm mb-2">
-                                    Account Balance (USD) <Text className="text-red-500">*</Text>
-                                </Text>
                                 <TextInput
                                     className="bg-bg-secondary text-txt-primary rounded-lg p-4 border border-border"
                                     placeholder="10,000"
@@ -450,7 +432,6 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
                                     </Text>
                                 </View>
 
-                                {/* Stop Loss in Pips & Risk Percentage */}
                                 <View className="flex-row mb-4">
                                     <View className="flex-1 mr-2">
                                         <Text className="text-red-500 text-sm font-semibold mb-2">
@@ -464,9 +445,6 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
                                             onChangeText={setStopLossPips}
                                             keyboardType="numeric"
                                         />
-                                        <Text className="text-txt-tertiary text-xs mt-1 text-center">
-                                            Distance from entry
-                                        </Text>
                                     </View>
 
                                     <View className="flex-1 ml-2">
@@ -481,13 +459,9 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
                                             onChangeText={setRiskPercentage}
                                             keyboardType="decimal-pad"
                                         />
-                                        <Text className="text-txt-tertiary text-xs mt-1 text-center">
-                                            Recommended: 1-2%
-                                        </Text>
                                     </View>
                                 </View>
 
-                                {/* Calculated Lot Size - Prominentnije */}
                                 <View
                                     className="rounded-xl p-5 border-2 mb-4"
                                     style={{
@@ -506,10 +480,9 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
                                     </Text>
                                 </View>
 
-                                {/* Optional: Entry & TP for reference */}
                                 <View className="bg-bg-tertiary rounded-lg p-4 border border-border">
                                     <Text className="text-txt-secondary text-xs font-semibold mb-3">
-                                        Trade Levels (Optional - for notes)
+                                        Trade Levels (Optional)
                                     </Text>
 
                                     <View className="flex-row mb-3">
@@ -552,23 +525,10 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
                                 </View>
                             </View>
 
-                            {/* Info Box */}
-                            <View className="mb-4 bg-bg-tertiary rounded-lg p-3 border-l-4 border-accent-cyan">
-                                <View className="flex-row items-start">
-                                    <Ionicons name="information-circle-outline" size={20} color="#00F5D4" style={{ marginTop: 2 }} />
-                                    <Text className="text-txt-secondary text-xs ml-2 flex-1">
-                                        Lot size calculation uses standard pip values ($10 per standard lot). Actual values may vary slightly based on your broker and current exchange rates.
-                                    </Text>
-                                </View>
-                            </View>
-
-
-
-
                             {/* Notes */}
                             <View className="mb-4">
                                 <Text className="text-txt-primary text-base font-semibold mb-2">
-                                    Notes <Text className="text-red-500">*</Text>
+                                    Notes
                                 </Text>
                                 <TextInput
                                     className="bg-bg-secondary text-txt-primary rounded-lg p-4 border border-border"
@@ -585,7 +545,7 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
                             {/* Chart Image Upload */}
                             <View className="mb-6">
                                 <Text className="text-txt-primary text-base font-semibold mb-2">
-                                    Chart Image (Before Trade) <Text className="text-red-500">*</Text>
+                                    Chart Image (Before Trade)
                                 </Text>
 
                                 {chartImage ? (
@@ -610,10 +570,7 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
                                         >
                                             <Ionicons name="cloud-upload-outline" size={48} color="#8B95A5" />
                                             <Text className="text-txt-secondary text-center mt-2">
-                                                Click to upload before-trade chart
-                                            </Text>
-                                            <Text className="text-txt-tertiary text-xs text-center mt-1">
-                                                PNG, JPG up to 10MB (1 image only)
+                                                Click to upload chart
                                             </Text>
                                         </TouchableOpacity>
 
@@ -670,5 +627,4 @@ export default function SaveTradeModal({ visible, onClose, confluenceScore, conf
             </View>
         </Modal>
     );
-
 }
