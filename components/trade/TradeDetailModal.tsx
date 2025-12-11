@@ -3,7 +3,7 @@ import { getSetupCategory } from "@/lib/utils";
 import { Trade } from "@/types/trade";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   Alert,
   Image,
@@ -65,12 +65,12 @@ export default function TradeDetailModal({
 
   const isClosed = trade.status === "CLOSED";
 
-  useEffect(() => {
-    console.log(
-      "🔍 Trade confluence_data:",
-      JSON.stringify(trade.confluence_data, null, 2)
-    );
-  }, [trade.confluence_data]);
+  // useEffect(() => {
+  //   console.log(
+  //     "🔍 Trade confluence_data:",
+  //     JSON.stringify(trade.confluence_data, null, 2)
+  //   );
+  // }, [trade.confluence_data]);
 
   const handleSaveChanges = async () => {
     if (!profitAmount) {
@@ -213,13 +213,10 @@ export default function TradeDetailModal({
       const fileName = `after-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      console.log("📤 Uploading after trade image to:", filePath);
-
       const response = await fetch(imageUri);
       if (!response.ok) return null;
 
       const arrayBuffer = await response.arrayBuffer();
-      console.log("📦 After image size:", arrayBuffer.byteLength);
 
       if (arrayBuffer.byteLength === 0) return null;
 
@@ -232,18 +229,14 @@ export default function TradeDetailModal({
         });
 
       if (error) {
-        console.error("❌ After image upload error:", error);
         return null;
       }
 
       const { data: urlData } = supabase.storage
         .from("trade-charts")
         .getPublicUrl(filePath);
-
-      console.log("✅ After image URL:", urlData.publicUrl);
       return urlData.publicUrl;
     } catch (error: any) {
-      console.error("💥 After image upload error:", error);
       return null;
     }
   };

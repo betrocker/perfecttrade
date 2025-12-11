@@ -182,7 +182,7 @@ export default function JournalScreen() {
   return (
     <View className="flex-1 bg-bg-primary">
       {/* Header */}
-      <View className="px-4 pt-14 pb-6">
+      <View className="px-4 pt-4 pb-6">
         <Text className="text-txt-primary text-3xl font-bold">
           Trading History
         </Text>
@@ -216,7 +216,7 @@ export default function JournalScreen() {
             tintColor="#00F5D4"
           />
         }
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: 112 }}
       >
         {filteredTrades.length === 0 ? (
           <View className="items-center justify-center py-20">
