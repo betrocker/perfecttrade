@@ -76,7 +76,7 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: "Dashboard",
-          tabBarLabel: "Home",
+          tabBarLabel: "Dashboard",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "home" : "home-outline"}

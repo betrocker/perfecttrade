@@ -82,20 +82,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
-  const signIn = async (email: string, password: string) => {
-    // Clear any stale session first
-    await supabase.auth.signOut();
+  const signIn = async (email: string, password: string, retries = 2) => {
+    try {
+      // Clear any stale session first
+      await supabase.auth.signOut();
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) throw error;
+      if (error) throw error;
 
-    // Manually set state to avoid race condition
-    setSession(data.session);
-    setUser(data.user);
+      // Manually set state to avoid race condition
+      setSession(data.session);
+      setUser(data.user);
+    } catch (error: any) {
+      // Retry on network errors
+      if (retries > 0 && error.message?.includes("Network request failed")) {
+        console.log(`Network error, retrying... (${retries} attempts left)`);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return signIn(email, password, retries - 1);
+      }
+      throw error;
+    }
   };
 
   const signOut = async () => {
