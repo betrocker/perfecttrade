@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { userSettingsService } from "@/lib/userSettingsService";
 import { UserSettings } from "@/types/userSettings";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import { useCallback, useState } from "react";
@@ -414,6 +415,11 @@ export default function SettingsScreen() {
     );
   }
 
+  const onReset = async () => {
+    await AsyncStorage.removeItem("hasOnboarded");
+    router.replace("/");
+  };
+
   return (
     <ScrollView className="flex-1 bg-[#0A0F1A]">
       <View className="p-4 pb-28">
@@ -462,6 +468,17 @@ export default function SettingsScreen() {
                 <Text className="text-accent-cyan text-base">Logout</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#00F5D4" />
+            </TouchableOpacity>
+          </View>
+
+          <View className="flex-1 bg-bg-primary p-6">
+            <TouchableOpacity
+              onPress={onReset}
+              className="bg-red-500 rounded-2xl p-4"
+            >
+              <Text className="text-white font-semibold text-center">
+                Reset onboarding
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
