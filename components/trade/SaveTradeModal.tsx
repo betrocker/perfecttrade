@@ -16,13 +16,18 @@ import {
   View,
 } from "react-native";
 
+import { usePremium } from "@/context/PremiumContext"; // prilagodi putanju
+import { useRouter } from "expo-router";
+
 type SaveTradeModalProps = {
   visible: boolean;
   onClose: () => void;
   confluenceScore: number;
   confluenceColor: string;
-  checkedItems: any[]; // ← DODAJ OVO
+  checkedItems: any[];
 };
+
+const FREE_CLOSED_TRADES_LIMIT = 10;
 
 export default function SaveTradeModal({
   visible,
@@ -31,6 +36,9 @@ export default function SaveTradeModal({
   confluenceColor,
   checkedItems,
 }: SaveTradeModalProps) {
+  const router = useRouter();
+  const { isPremium, loading: premiumLoading } = usePremium();
+
   const [currencyPair, setCurrencyPair] = useState("");
   const [direction, setDirection] = useState<"LONG" | "SHORT">("LONG");
   const [accountBalance, setAccountBalance] = useState("10000");
@@ -178,13 +186,11 @@ export default function SaveTradeModal({
       }
 
       const fileExt = imageUri.split(".").pop()?.toLowerCase() || "jpg";
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const fileName = `${Date.now()}-${Math.random()
+        .toString(36)
+        .substring(7)}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      console.log("📤 Uploading to:", filePath);
-      console.log("📍 From URI:", imageUri);
-
-      // Fetch image as arrayBuffer (bolje za React Native)
       const response = await fetch(imageUri);
       if (!response.ok) {
         console.error("❌ Fetch failed:", response.status);
@@ -192,14 +198,11 @@ export default function SaveTradeModal({
       }
 
       const arrayBuffer = await response.arrayBuffer();
-      console.log("📦 ArrayBuffer size:", arrayBuffer.byteLength);
-
       if (arrayBuffer.byteLength === 0) {
         console.error("❌ Empty ArrayBuffer");
         return null;
       }
 
-      // Upload using arrayBuffer
       const { data, error } = await supabase.storage
         .from("trade-charts")
         .upload(filePath, arrayBuffer, {
@@ -213,14 +216,10 @@ export default function SaveTradeModal({
         return null;
       }
 
-      console.log("✅ Upload success:", data);
-
-      // Get public URL
       const { data: urlData } = supabase.storage
         .from("trade-charts")
         .getPublicUrl(filePath);
 
-      console.log("🔗 Public URL:", urlData.publicUrl);
       return urlData.publicUrl;
     } catch (error: any) {
       console.error("💥 Upload error:", error);
@@ -228,13 +227,21 @@ export default function SaveTradeModal({
     }
   };
 
+  const getClosedTradesCountForUser = async (
+    userId: string
+  ): Promise<number> => {
+    const { count, error } = await supabase
+      .from("trades")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("status", "CLOSED");
+
+    if (error) throw error;
+    return count ?? 0;
+  };
+
   const handleSave = async () => {
-    const confluenceItems = getConfluenceData();
-    const confluenceData = {
-      score: confluenceScore,
-      timestamp: new Date().toISOString(),
-      items: confluenceItems,
-    };
+    // validacije
     if (!currencyPair) {
       Alert.alert("Error", "Please select a currency pair");
       return;
@@ -248,34 +255,60 @@ export default function SaveTradeModal({
       return;
     }
 
+    // premium status se još učitava
+    if (premiumLoading) {
+      Alert.alert("Please wait", "Checking subscription status...");
+      return;
+    }
+
     setSaving(true);
 
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
       if (!user) {
         Alert.alert("Error", "You must be logged in to save trades");
         setSaving(false);
         return;
       }
 
+      // FREE LIMIT gating
+      if (!isPremium) {
+        const closedCount = await getClosedTradesCountForUser(user.id);
+        if (closedCount >= FREE_CLOSED_TRADES_LIMIT) {
+          Alert.alert(
+            "Premium required",
+            `Free plan supports up to ${FREE_CLOSED_TRADES_LIMIT} closed trades. Upgrade to Premium for unlimited trades.`,
+            [
+              { text: "Not now", style: "cancel" },
+              {
+                text: "Upgrade",
+                onPress: () => {
+                  onClose();
+                  router.push("/paywall");
+                },
+              },
+            ]
+          );
+          return;
+        }
+      }
+
       let chartImageUrl = null;
       if (chartImage) {
-        console.log("🖼️ Uploading chart image...");
         chartImageUrl = await uploadChartImage(chartImage);
       }
 
       const lotSize = calculateLotSize();
 
-      // ← KORISTI checkedItems
+      // koristi checkedItems
       const confluenceData = {
         score: confluenceScore,
         timestamp: new Date().toISOString(),
-        items: checkedItems, // ← OVO JE KLJUČNO
+        items: checkedItems,
       };
-
-      console.log("💾 Saving confluence data:", confluenceData);
 
       const { data: trade, error: tradeError } = await supabase
         .from("trades")
@@ -294,7 +327,7 @@ export default function SaveTradeModal({
               ? parseFloat(takeProfitPrice)
               : null,
             confluence_score: confluenceScore,
-            confluence_data: confluenceData, // ← ČUVA SVE ITEMS
+            confluence_data: confluenceData,
             notes: notes || null,
             status: "PLANNED",
             chart_image_url: chartImageUrl,
@@ -305,7 +338,7 @@ export default function SaveTradeModal({
 
       if (tradeError) throw tradeError;
 
-      Alert.alert("Success! 🎉", "Your trade has been saved successfully.", [
+      Alert.alert("Success!", "Your trade has been saved successfully.", [
         {
           text: "OK",
           onPress: () => {

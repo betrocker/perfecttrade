@@ -20,8 +20,15 @@ import {
   View,
 } from "react-native";
 
+import { usePremium } from "@/context/PremiumContext"; // prilagodi putanju ako ti nije /src
+import { useRouter } from "expo-router";
+
 export default function HomeScreen() {
   const { user } = useAuth();
+  const router = useRouter();
+
+  const { isPremium, loading: premiumLoading } = usePremium();
+
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -50,10 +57,26 @@ export default function HomeScreen() {
       const [statsData, tradingDaysData, pairsData, monthlyData, weeklyData] =
         await Promise.all([
           dashboardService.getDashboardStats(user.id),
-          dashboardService.getTradingDays(user.id, year, month),
-          dashboardService.getPerformingPairs(user.id),
-          dashboardService.getMonthlyPnL(user.id, 6),
-          dashboardService.getWeeklySummary(user.id, year, month),
+
+          // premium-only data
+          isPremium
+            ? dashboardService.getTradingDays(user.id, year, month)
+            : Promise.resolve({} as Record<string, TradingDay>),
+
+          isPremium
+            ? dashboardService.getPerformingPairs(user.id)
+            : Promise.resolve({ best: null, worst: null } as {
+                best: PerformingPair | null;
+                worst: PerformingPair | null;
+              }),
+
+          isPremium
+            ? dashboardService.getMonthlyPnL(user.id, 6)
+            : Promise.resolve([] as MonthlyPnL[]),
+
+          isPremium
+            ? dashboardService.getWeeklySummary(user.id, year, month)
+            : Promise.resolve([] as WeeklySummary[]),
         ]);
 
       setStats(statsData);
@@ -72,14 +95,14 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       loadDashboardData();
-    }, [user, currentMonth])
+    }, [user, currentMonth, isPremium])
   );
 
   useEffect(() => {
     if (user) {
       loadDashboardData();
     }
-  }, [user, currentMonth]);
+  }, [user, currentMonth, isPremium]);
 
   // Helper function to get currency flag emoji
   const getCurrencyFlag = (currency: string): string => {
@@ -122,7 +145,9 @@ export default function HomeScreen() {
   };
 
   const formatDateKey = (year: number, month: number, day: number) => {
-    return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return `${year}-${String(month + 1).padStart(2, "0")}-${String(
+      day
+    ).padStart(2, "0")}`;
   };
 
   const formatDateDisplay = (dateKey: string) => {
@@ -145,6 +170,11 @@ export default function HomeScreen() {
   };
 
   const handleDayPress = (dateKey: string) => {
+    if (!isPremium) {
+      router.push("/paywall");
+      return;
+    }
+
     const dayData = tradingDays[dateKey];
     if (dayData && dayData.trades.length > 0) {
       setSelectedDate(dateKey);
@@ -187,10 +217,13 @@ export default function HomeScreen() {
           key={day}
           className="w-[14%] aspect-square p-1"
           onPress={() => handleDayPress(dateKey)}
-          disabled={!dayData}
+          disabled={!isPremium ? false : !dayData}
+          activeOpacity={0.85}
         >
           <View
-            className={`${bgColor} rounded-xl flex-1 justify-center items-center ${today ? "border-2 border-txt-primary" : ""}`}
+            className={`${bgColor} rounded-xl flex-1 justify-center items-center ${
+              today ? "border-2 border-txt-primary" : ""
+            } ${!isPremium ? "opacity-60" : ""}`}
           >
             <Text className="text-txt-primary text-base font-bold">{day}</Text>
           </View>
@@ -212,6 +245,7 @@ export default function HomeScreen() {
   };
 
   const renderDayModal = () => {
+    if (!isPremium) return null;
     if (!selectedDate) return null;
 
     const dayData = tradingDays[selectedDate];
@@ -343,7 +377,9 @@ export default function HomeScreen() {
                         <Text className={`text-2xl font-bold ${textColor}`}>
                           {isBreakeven
                             ? "$0"
-                            : `${isWin ? "+" : "-"}$${Math.abs(profitLoss).toLocaleString()}`}
+                            : `${isWin ? "+" : "-"}$${Math.abs(
+                                profitLoss
+                              ).toLocaleString()}`}
                         </Text>
                       </View>
                     </View>
@@ -357,7 +393,7 @@ export default function HomeScreen() {
     );
   };
 
-  if (loading || !stats) {
+  if (loading || premiumLoading || !stats) {
     return (
       <View className="flex-1 bg-bg-primary items-center justify-center">
         <ActivityIndicator size="large" color="#00F5D4" />
@@ -386,7 +422,7 @@ export default function HomeScreen() {
           Your trading performance at a glance
         </Text>
 
-        {/* Net Profit & Loss Card */}
+        {/* Net Profit & Loss Card (FREE) */}
         <View className="bg-[#1E3A3A] rounded-2xl p-6 mb-4">
           <View className="flex-row justify-between items-start mb-4">
             <View>
@@ -431,7 +467,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Profit/Loss Cards Row */}
+        {/* Profit/Loss Cards Row (FREE) */}
         <View className="flex-row mb-4">
           <View className="bg-[#1E3A3A] rounded-2xl p-4 flex-1 mr-2">
             <View className="flex-row justify-between items-center mb-2">
@@ -460,7 +496,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Stats Cards Grid */}
+        {/* Stats Cards Grid (FREE) */}
         <View className="flex-row flex-wrap justify-between mb-4">
           <View className="bg-[#2A3F54] rounded-2xl p-4 w-[48%] mb-3">
             <View className="flex-row items-center">
@@ -527,8 +563,25 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Best/Worst Performing Pairs */}
-        {(performingPairs.best || performingPairs.worst) && (
+        {/* Advanced stats lock card (PREMIUM upsell) */}
+        {!isPremium && (
+          <TouchableOpacity
+            className="bg-bg-secondary rounded-2xl p-4 mb-4 border border-border"
+            activeOpacity={0.85}
+            onPress={() => router.push("/paywall")}
+          >
+            <Text className="text-txt-primary text-lg font-bold">
+              Advanced Stats (Premium)
+            </Text>
+            <Text className="text-txt-secondary text-sm mt-1">
+              Unlock performing pairs, monthly P&L, trading calendar and daily
+              breakdown.
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Best/Worst Performing Pairs (PREMIUM) */}
+        {isPremium && (performingPairs.best || performingPairs.worst) && (
           <View className="flex-row mb-4">
             {performingPairs.best && (
               <View className="bg-[#1E3A3A] rounded-2xl p-4 flex-1 mr-2">
@@ -632,7 +685,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Performance Breakdown */}
+        {/* Performance Breakdown (FREE) */}
         <View className="bg-bg-secondary rounded-2xl p-4 mb-4">
           <View className="flex-row items-center mb-4">
             <Ionicons name="bar-chart" size={20} color="#8B95A5" />
@@ -699,7 +752,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Recent Trades */}
+        {/* Recent Trades (FREE - ali ovde u ovoj verziji je prazno za non-premium jer tradingDays ne učitavamo) */}
         {recentTrades.length > 0 && (
           <View className="bg-bg-secondary rounded-2xl p-4 mb-4">
             <View className="flex-row items-center mb-4">
@@ -713,7 +766,6 @@ export default function HomeScreen() {
               const profitLoss = trade.profit_loss || 0;
               const isWin = profitLoss > 0;
               const isLoss = profitLoss < 0;
-              const isBreakeven = profitLoss === 0;
 
               let result = "BE";
               let bgColor = "bg-warning/20";
@@ -780,8 +832,8 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Monthly P&L Chart */}
-        {monthlyPnL.length > 0 && (
+        {/* Monthly P&L Chart (PREMIUM) */}
+        {isPremium && monthlyPnL.length > 0 && (
           <View className="bg-bg-secondary rounded-2xl p-4 mb-4">
             <Text className="text-txt-primary text-lg font-bold mb-2">
               Monthly P&L
@@ -805,12 +857,16 @@ export default function HomeScreen() {
                   <View key={index} className="items-center flex-1 mx-1">
                     <View className="flex-1 justify-end w-full">
                       <View
-                        className={`${isPositive ? "bg-accent-cyan" : "bg-error"} rounded-t-lg w-full`}
+                        className={`${
+                          isPositive ? "bg-accent-cyan" : "bg-error"
+                        } rounded-t-lg w-full`}
                         style={{ height: `${height}%` }}
                       />
                     </View>
                     <Text
-                      className={`text-xs font-bold mt-2 ${isPositive ? "text-accent-cyan" : "text-error"}`}
+                      className={`text-xs font-bold mt-2 ${
+                        isPositive ? "text-accent-cyan" : "text-error"
+                      }`}
                     >
                       ${Math.abs(item.profit).toFixed(0)}
                     </Text>
@@ -824,122 +880,127 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Trading Calendar */}
-        <View className="bg-bg-secondary rounded-2xl p-4 mb-4">
-          <View className="flex-row items-center mb-4">
-            <Ionicons name="calendar" size={24} color="#fff" />
-            <Text className="text-txt-primary text-xl font-bold ml-2">
-              Trading Calendar
-            </Text>
-          </View>
-
-          {/* Calendar Header */}
-          <View className="flex-row items-center justify-between mb-4">
-            <TouchableOpacity
-              onPress={goToToday}
-              className="bg-info/60 px-4 py-2 rounded-lg"
-            >
-              <Text className="text-bg-primary font-bold">TODAY</Text>
-            </TouchableOpacity>
-
-            <View className="flex-row items-center">
-              <TouchableOpacity onPress={() => changeMonth(-1)} className="p-2">
-                <Ionicons name="chevron-back" size={24} color="#fff" />
-              </TouchableOpacity>
-              <Text className="text-txt-primary text-lg font-bold mx-4">
-                {currentMonth.toLocaleDateString("en-US", {
-                  month: "long",
-                  year: "numeric",
-                })}
+        {/* Trading Calendar (PREMIUM) */}
+        {isPremium && (
+          <View className="bg-bg-secondary rounded-2xl p-4 mb-4">
+            <View className="flex-row items-center mb-4">
+              <Ionicons name="calendar" size={24} color="#fff" />
+              <Text className="text-txt-primary text-xl font-bold ml-2">
+                Trading Calendar
               </Text>
-              <TouchableOpacity onPress={() => changeMonth(1)} className="p-2">
-                <Ionicons name="chevron-forward" size={24} color="#fff" />
-              </TouchableOpacity>
             </View>
 
-            <View className="w-20" />
-          </View>
+            <View className="flex-row items-center justify-between mb-4">
+              <TouchableOpacity
+                onPress={goToToday}
+                className="bg-info/60 px-4 py-2 rounded-lg"
+              >
+                <Text className="text-bg-primary font-bold">TODAY</Text>
+              </TouchableOpacity>
 
-          {/* Day Names */}
-          <View className="flex-row mb-2">
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-              <View key={day} className="w-[14%] items-center">
-                <Text className="text-txt-secondary text-xs font-bold">
-                  {day}
+              <View className="flex-row items-center">
+                <TouchableOpacity
+                  onPress={() => changeMonth(-1)}
+                  className="p-2"
+                >
+                  <Ionicons name="chevron-back" size={24} color="#fff" />
+                </TouchableOpacity>
+                <Text className="text-txt-primary text-lg font-bold mx-4">
+                  {currentMonth.toLocaleDateString("en-US", {
+                    month: "long",
+                    year: "numeric",
+                  })}
                 </Text>
+                <TouchableOpacity
+                  onPress={() => changeMonth(1)}
+                  className="p-2"
+                >
+                  <Ionicons name="chevron-forward" size={24} color="#fff" />
+                </TouchableOpacity>
               </View>
-            ))}
-          </View>
 
-          {/* Calendar Grid */}
-          <View className="flex-row flex-wrap">{renderCalendar()}</View>
+              <View className="w-20" />
+            </View>
 
-          {/* Weekly Summary */}
-          {weeklySummary.length > 0 && (
-            <View className="mt-4 pt-4 border-t border-bg-primary">
-              <Text className="text-txt-primary text-sm font-bold mb-2">
-                Weekly Summary
-              </Text>
-              <View className="flex-row justify-between">
-                {weeklySummary.map((week) => (
-                  <View
-                    key={week.week}
-                    className={`items-center flex-1 mx-1 py-2 px-1 rounded-lg ${
-                      week.profit > 0
-                        ? "bg-accent-cyan/10 border border-accent-cyan/30"
-                        : week.profit < 0
-                          ? "bg-error/10 border border-error/30"
-                          : "bg-bg-primary border border-border"
-                    }`}
-                  >
-                    <Text className="text-txt-secondary text-xs mb-1">
-                      W{week.week}
-                    </Text>
-                    <Text
-                      className={`text-sm font-bold ${
+            <View className="flex-row mb-2">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                <View key={day} className="w-[14%] items-center">
+                  <Text className="text-txt-secondary text-xs font-bold">
+                    {day}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            <View className="flex-row flex-wrap">{renderCalendar()}</View>
+
+            {weeklySummary.length > 0 && (
+              <View className="mt-4 pt-4 border-t border-bg-primary">
+                <Text className="text-txt-primary text-sm font-bold mb-2">
+                  Weekly Summary
+                </Text>
+                <View className="flex-row justify-between">
+                  {weeklySummary.map((week) => (
+                    <View
+                      key={week.week}
+                      className={`items-center flex-1 mx-1 py-2 px-1 rounded-lg ${
                         week.profit > 0
-                          ? "text-accent-cyan"
+                          ? "bg-accent-cyan/10 border border-accent-cyan/30"
                           : week.profit < 0
-                            ? "text-error"
-                            : "text-txt-secondary"
+                            ? "bg-error/10 border border-error/30"
+                            : "bg-bg-primary border border-border"
                       }`}
                     >
-                      {week.profit !== 0
-                        ? `$${
-                            Math.abs(week.profit) >= 1000
-                              ? (Math.abs(week.profit) / 1000).toFixed(1) + "K"
-                              : Math.abs(week.profit).toFixed(0)
-                          }`
-                        : "$0"}
-                    </Text>
-                    {week.days > 0 && (
-                      <Ionicons
-                        name={
+                      <Text className="text-txt-secondary text-xs mb-1">
+                        W{week.week}
+                      </Text>
+                      <Text
+                        className={`text-sm font-bold ${
                           week.profit > 0
-                            ? "trending-up"
+                            ? "text-accent-cyan"
                             : week.profit < 0
-                              ? "trending-down"
-                              : "remove"
-                        }
-                        size={12}
-                        color={
-                          week.profit > 0
-                            ? "#00F5D4"
-                            : week.profit < 0
-                              ? "#EF4444"
-                              : "#8B95A5"
-                        }
-                      />
-                    )}
-                  </View>
-                ))}
+                              ? "text-error"
+                              : "text-txt-secondary"
+                        }`}
+                      >
+                        {week.profit !== 0
+                          ? `$${
+                              Math.abs(week.profit) >= 1000
+                                ? (Math.abs(week.profit) / 1000).toFixed(1) +
+                                  "K"
+                                : Math.abs(week.profit).toFixed(0)
+                            }`
+                          : "$0"}
+                      </Text>
+                      {week.days > 0 && (
+                        <Ionicons
+                          name={
+                            week.profit > 0
+                              ? "trending-up"
+                              : week.profit < 0
+                                ? "trending-down"
+                                : "remove"
+                          }
+                          size={12}
+                          color={
+                            week.profit > 0
+                              ? "#00F5D4"
+                              : week.profit < 0
+                                ? "#EF4444"
+                                : "#8B95A5"
+                          }
+                        />
+                      )}
+                    </View>
+                  ))}
+                </View>
               </View>
-            </View>
-          )}
-        </View>
+            )}
+          </View>
+        )}
       </View>
 
-      {/* Day Details Modal */}
+      {/* Day Details Modal (PREMIUM) */}
       {renderDayModal()}
     </ScrollView>
   );
