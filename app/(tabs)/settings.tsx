@@ -393,17 +393,19 @@ export default function SettingsScreen() {
   };
 
   const handlePrivacyPolicy = () => {
-    const url = "https://yourwebsite.com/privacy"; // Promeni na svoj URL
-    Linking.openURL(url).catch(() => {
-      Alert.alert("Error", "Could not open privacy policy.");
-    });
+    try {
+      router.push("/privacy"); // putanja do PrivacyPolicyScreen
+    } catch {
+      Alert.alert("Error", "Could not open privacy policy screen.");
+    }
   };
 
   const handleTermsOfService = () => {
-    const url = "https://yourwebsite.com/terms"; // Promeni na svoj URL
-    Linking.openURL(url).catch(() => {
-      Alert.alert("Error", "Could not open terms of service.");
-    });
+    try {
+      router.push("/terms"); // putanja do TermsOfServiceScreen
+    } catch {
+      Alert.alert("Error", "Could not open terms of service screen.");
+    }
   };
 
   if (loading || !settings) {
