@@ -1,5 +1,6 @@
 import { AuthProvider } from "@/context/AuthContext";
 import { ChecklistProvider } from "@/context/ChecklistContext";
+import { NotificationProvider } from "@/context/NotificationContext";
 import { PremiumProvider } from "@/context/PremiumContext";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -8,24 +9,26 @@ import "../global.css";
 
 export default function RootLayout() {
   return (
-    <PremiumProvider>
-      <SafeAreaProvider>
-        <AuthProvider>
-          <ChecklistProvider>
-            <StatusBar style="light" backgroundColor="#1B2838" />
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: {
-                  backgroundColor: "#1B2838",
-                },
-              }}
-            >
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            </Stack>
-          </ChecklistProvider>
-        </AuthProvider>
-      </SafeAreaProvider>
-    </PremiumProvider>
+    <AuthProvider>
+      <PremiumProvider>
+        <NotificationProvider>
+          <SafeAreaProvider>
+            <ChecklistProvider>
+              <StatusBar style="light" backgroundColor="#1B2838" />
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: {
+                    backgroundColor: "#1B2838",
+                  },
+                }}
+              >
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              </Stack>
+            </ChecklistProvider>
+          </SafeAreaProvider>
+        </NotificationProvider>
+      </PremiumProvider>
+    </AuthProvider>
   );
 }

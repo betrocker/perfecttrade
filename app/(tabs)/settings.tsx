@@ -1,4 +1,5 @@
 import { useAuth } from "@/context/AuthContext";
+import { useNotifications } from "@/context/NotificationContext";
 import { supabase } from "@/lib/supabase";
 import { userSettingsService } from "@/lib/userSettingsService";
 import { UserSettings } from "@/types/userSettings";
@@ -7,6 +8,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import { useCallback, useState } from "react";
+
 import {
   ActivityIndicator,
   Alert,
@@ -23,6 +25,13 @@ export default function SettingsScreen() {
 
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const {
+    scheduleDailyReminder,
+    cancelDailyReminder,
+    hasPermission,
+    requestPermission,
+  } = useNotifications();
 
   const loadSettings = async () => {
     if (!user) return;
@@ -195,11 +204,28 @@ export default function SettingsScreen() {
   const toggleDailyReminder = async (enabled: boolean) => {
     if (!user || !settings) return;
 
+    if (enabled && !hasPermission) {
+      const granted = await requestPermission();
+      if (!granted) {
+        Alert.alert(
+          "Permission Required",
+          "Please enable notifications in settings to use reminders."
+        );
+        return;
+      }
+    }
+
     const success = await userSettingsService.updateDailyReminder(
       user.id,
       enabled
     );
+
     if (success) {
+      if (enabled) {
+        await scheduleDailyReminder(settings.daily_reminder_time);
+      } else {
+        await cancelDailyReminder();
+      }
       setSettings({ ...settings, daily_reminder_enabled: enabled });
     }
   };

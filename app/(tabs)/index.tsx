@@ -1,4 +1,10 @@
+import GoalsProgressCard from "@/components/GoalsProgressCard";
 import { useAuth } from "@/context/AuthContext";
+import {
+  GoalsProgress,
+  goalsTrackingService,
+} from "@/lib/goalsTrackingService";
+
 import {
   dashboardService,
   DashboardStats,
@@ -33,6 +39,9 @@ export default function HomeScreen() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [goalsProgress, setGoalsProgress] = useState<GoalsProgress | null>(
+    null
+  );
 
   // Data states
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -53,6 +62,9 @@ export default function HomeScreen() {
     try {
       const year = currentMonth.getFullYear();
       const month = currentMonth.getMonth();
+
+      const goalsData = await goalsTrackingService.getGoalsProgress(user.id);
+      setGoalsProgress(goalsData);
 
       const [statsData, tradingDaysData, pairsData, monthlyData, weeklyData] =
         await Promise.all([
@@ -421,6 +433,9 @@ export default function HomeScreen() {
         <Text className="text-txt-secondary text-base mb-6">
           Your trading performance at a glance
         </Text>
+
+        {/* Goals Progress Card */}
+        {goalsProgress && <GoalsProgressCard progress={goalsProgress} />}
 
         {/* Net Profit & Loss Card (FREE) */}
         <View className="bg-[#1E3A3A] rounded-2xl p-6 mb-4">

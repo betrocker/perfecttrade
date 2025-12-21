@@ -1,9 +1,13 @@
+import { useAuth } from "@/context/AuthContext";
+import { goalsTrackingService } from "@/lib/goalsTrackingService";
+import { notificationService } from "@/lib/notificationService";
 import { supabase } from "@/lib/supabase";
 import { getSetupCategory } from "@/lib/utils";
 import { Trade } from "@/types/trade";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import React, { useState } from "react";
+
 import {
   Alert,
   Image,
@@ -116,6 +120,28 @@ export default function TradeDetailModal({
         .eq("id", trade.id);
 
       if (error) throw error;
+
+      // ✅ DODAJ OVO - Send trade result notification
+      const isWin = finalProfit > 0;
+      await notificationService.sendTradeResultNotification(
+        Math.abs(finalProfit),
+        trade.currency_pair,
+        isWin
+      );
+
+      // ✅ DODAJ OVO - Check goals and send warnings if needed
+      if (user) {
+        await notificationService.checkGoalsAndNotify(user.id);
+
+        // Check if monthly goal achieved
+        const progress = await goalsTrackingService.getGoalsProgress(user.id);
+        if (progress && progress.monthlyProgress >= progress.monthlyTarget) {
+          await notificationService.sendMonthlyGoalAchievement(
+            progress.monthlyProgress,
+            progress.monthlyTarget
+          );
+        }
+      }
 
       Alert.alert("Success", "Trade updated successfully");
       onUpdate();
@@ -258,6 +284,8 @@ export default function TradeDetailModal({
       ]
     );
   };
+
+  const { user } = useAuth();
 
   return (
     <Modal
