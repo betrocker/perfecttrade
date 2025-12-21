@@ -6,11 +6,15 @@ import { supabase } from "./supabase";
 
 // Configure notification handler
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
+  handleNotification: async (notification) => {
+    return {
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    };
+  },
 });
 
 export interface NotificationSchedule {
@@ -103,6 +107,7 @@ class NotificationService {
       const [hours, minutes] = time.split(":").map(Number);
 
       const trigger: Notifications.NotificationTriggerInput = {
+        type: Notifications.SchedulableTriggerInputTypes.CALENDAR, // ✅ DODAJ OVO
         hour: hours,
         minute: minutes,
         repeats: true,
@@ -325,10 +330,10 @@ class NotificationService {
   // Remove listeners
   removeNotificationListeners(): void {
     if (this.notificationListener) {
-      Notifications.removeNotificationSubscription(this.notificationListener);
+      this.notificationListener.remove(); // ✅ PROMENI OVO
     }
     if (this.responseListener) {
-      Notifications.removeNotificationSubscription(this.responseListener);
+      this.responseListener.remove(); // ✅ PROMENI OVO
     }
   }
 
