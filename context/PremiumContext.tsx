@@ -1,9 +1,16 @@
-import { supabase } from "@/lib/supabase"; // prilagodi putanju ako je drugačija
+import {
+  initRevenueCat,
+  isPremiumFromInfo,
+  revenueCatLogin,
+  revenueCatLogout,
+} from "@/lib/revenuecat";
+import { supabase } from "@/lib/supabase";
 import React, {
   createContext,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import Purchases, { CustomerInfo } from "react-native-purchases";
@@ -18,83 +25,131 @@ type PremiumContextValue = {
 
 const PremiumContext = createContext<PremiumContextValue | null>(null);
 
-const ENTITLEMENT_ID = "premium";
-
-function isPremiumFromInfo(info: CustomerInfo): boolean {
-  return info.entitlements.active[ENTITLEMENT_ID] != null;
-}
-
 export function PremiumProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isPremium, setIsPremium] = useState(false);
+  const hasInitialized = useRef(false);
+  const listenerRef = useRef<any>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    const sub = supabase.auth.onAuthStateChange(async (_event, session) => {
-      try {
-        setLoading(true);
-
-        const userId = session?.user?.id;
-        if (userId) await Purchases.logIn(userId);
-        else await Purchases.logOut();
-
-        const info = await Purchases.getCustomerInfo();
-        if (mounted) setIsPremium(isPremiumFromInfo(info));
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    });
-
     (async () => {
       try {
-        Purchases.configure({
-          apiKey: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY!,
-        });
+        // 1. Inicijalizuj RevenueCat SAMO JEDNOM
+        if (!hasInitialized.current) {
+          await initRevenueCat();
+          hasInitialized.current = true;
+        }
 
-        const { data } = await supabase.auth.getSession();
-        const userId = data.session?.user?.id;
-        if (userId) await Purchases.logIn(userId);
+        // 2. Proveri trenutnu sesiju
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
+        if (session?.user?.id) {
+          await revenueCatLogin(session.user.id);
+        }
+
+        // 3. Preuzmi premium status
         const info = await Purchases.getCustomerInfo();
-        if (mounted) setIsPremium(isPremiumFromInfo(info));
-
-        Purchases.addCustomerInfoUpdateListener((info) => {
-          if (!mounted) return;
+        if (mounted) {
           setIsPremium(isPremiumFromInfo(info));
-        });
+        }
+
+        // 4. Slušaj promene customer info
+        listenerRef.current = Purchases.addCustomerInfoUpdateListener(
+          (info: CustomerInfo) => {
+            if (mounted) {
+              setIsPremium(isPremiumFromInfo(info));
+              console.log(
+                "🔄 Premium status updated:",
+                isPremiumFromInfo(info)
+              );
+            }
+          }
+        );
+      } catch (error) {
+        console.error("❌ PremiumProvider init error:", error);
       } finally {
         if (mounted) setLoading(false);
       }
     })();
 
+    // 5. Slušaj auth promene (login/logout)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+
+      console.log("🔐 Auth event:", event);
+
+      try {
+        if (event === "SIGNED_IN" && session?.user?.id) {
+          await revenueCatLogin(session.user.id);
+          const info = await Purchases.getCustomerInfo();
+          setIsPremium(isPremiumFromInfo(info));
+        } else if (event === "SIGNED_OUT") {
+          await revenueCatLogout();
+          setIsPremium(false);
+        }
+      } catch (error) {
+        console.error("❌ Auth change error:", error);
+      }
+    });
+
     return () => {
       mounted = false;
-      sub.data.subscription.unsubscribe();
+      subscription.unsubscribe();
+      if (listenerRef.current) {
+        listenerRef.current.remove();
+      }
     };
-  }, []);
+  }, []); // Prazan dependency array - pokreni samo jednom!
 
   const refresh = async () => {
-    const info = await Purchases.getCustomerInfo();
-    setIsPremium(isPremiumFromInfo(info));
+    try {
+      const info = await Purchases.getCustomerInfo();
+      setIsPremium(isPremiumFromInfo(info));
+      console.log("🔄 Premium status refreshed");
+    } catch (error) {
+      console.error("❌ Refresh error:", error);
+    }
   };
 
   const purchase = async () => {
-    const offerings = await Purchases.getOfferings();
-    const current = offerings.current;
-    if (!current) throw new Error("No current offering configured");
+    try {
+      const offerings = await Purchases.getOfferings();
+      const current = offerings.current;
+      if (!current) throw new Error("No current offering configured");
 
-    // ti u RevenueCat namesti da je prvi package annual+trial
-    const pkg = current.availablePackages[0];
-    if (!pkg) throw new Error("No packages available");
+      const pkg = current.availablePackages[0];
+      if (!pkg) throw new Error("No packages available");
 
-    const res = await Purchases.purchasePackage(pkg);
-    setIsPremium(isPremiumFromInfo(res.customerInfo));
+      const res = await Purchases.purchasePackage(pkg);
+      setIsPremium(isPremiumFromInfo(res.customerInfo));
+      console.log("✅ Purchase successful");
+    } catch (error: any) {
+      if (error.userCancelled) {
+        console.log("⚠️ Purchase cancelled by user");
+        // NE throw-uj error ako je korisnik otkazao
+        return; // ili throw error da UI zna
+      }
+
+      console.error("❌ Purchase error:", error);
+      throw error; // Throw samo prave errore
+    }
   };
 
   const restore = async () => {
-    const info = await Purchases.restorePurchases();
-    setIsPremium(isPremiumFromInfo(info));
+    try {
+      const info = await Purchases.restorePurchases();
+      setIsPremium(isPremiumFromInfo(info));
+      console.log("✅ Purchases restored");
+    } catch (error) {
+      console.error("❌ Restore error:", error);
+      throw error;
+    }
   };
 
   const value = useMemo(
