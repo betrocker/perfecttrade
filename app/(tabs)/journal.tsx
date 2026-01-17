@@ -25,14 +25,11 @@ export default function JournalScreen() {
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
 
   const loadTrades = useCallback(async () => {
-    console.log("📊 Loading trades...");
     try {
       const {
         data: { user },
         error: authError,
       } = await supabase.auth.getUser();
-
-      console.log("👤 User:", user?.id);
 
       if (authError) {
         console.error("❌ Auth error:", authError);
@@ -41,13 +38,10 @@ export default function JournalScreen() {
       }
 
       if (!user) {
-        console.log("⚠️ No user found");
         setTrades([]);
         setLoading(false);
         return;
       }
-
-      console.log("🔍 Fetching trades for user:", user.id);
 
       const { data, error } = await supabase
         .from("trades")
@@ -64,7 +58,6 @@ export default function JournalScreen() {
         );
         setTrades([]);
       } else {
-        console.log("✅ Trades loaded:", data?.length || 0);
         setTrades(data || []);
       }
     } catch (error: any) {

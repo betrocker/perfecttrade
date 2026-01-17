@@ -69,13 +69,6 @@ export default function TradeDetailModal({
 
   const isClosed = trade.status === "CLOSED";
 
-  // useEffect(() => {
-  //   console.log(
-  //     "🔍 Trade confluence_data:",
-  //     JSON.stringify(trade.confluence_data, null, 2)
-  //   );
-  // }, [trade.confluence_data]);
-
   const handleSaveChanges = async () => {
     if (!profitAmount) {
       Alert.alert("Error", "Please enter profit amount");

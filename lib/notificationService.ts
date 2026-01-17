@@ -32,7 +32,6 @@ class NotificationService {
   // Request permissions
   async requestPermissions(): Promise<boolean> {
     if (!Device.isDevice) {
-      console.log("Must use physical device for Push Notifications");
       return false;
     }
 
@@ -46,7 +45,6 @@ class NotificationService {
     }
 
     if (finalStatus !== "granted") {
-      console.log("Failed to get push token for push notification!");
       return false;
     }
 
@@ -310,7 +308,6 @@ class NotificationService {
     // Listener for when notification is received while app is foregrounded
     this.notificationListener = Notifications.addNotificationReceivedListener(
       (notification) => {
-        console.log("Notification received:", notification);
         if (onNotificationReceived) {
           onNotificationReceived(notification);
         }
@@ -320,7 +317,6 @@ class NotificationService {
     // Listener for when user taps on notification
     this.responseListener =
       Notifications.addNotificationResponseReceivedListener((response) => {
-        console.log("Notification tapped:", response);
         if (onNotificationTapped) {
           onNotificationTapped(response);
         }

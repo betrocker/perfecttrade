@@ -62,10 +62,6 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
           (info: CustomerInfo) => {
             if (mounted) {
               setIsPremium(isPremiumFromInfo(info));
-              console.log(
-                "🔄 Premium status updated:",
-                isPremiumFromInfo(info)
-              );
             }
           }
         );
@@ -81,8 +77,6 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
-
-      console.log("🔐 Auth event:", event);
 
       try {
         if (event === "SIGNED_IN" && session?.user?.id) {
@@ -111,7 +105,6 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
     try {
       const info = await Purchases.getCustomerInfo();
       setIsPremium(isPremiumFromInfo(info));
-      console.log("🔄 Premium status refreshed");
     } catch (error) {
       console.error("❌ Refresh error:", error);
     }
@@ -128,10 +121,8 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
 
       const res = await Purchases.purchasePackage(pkg);
       setIsPremium(isPremiumFromInfo(res.customerInfo));
-      console.log("✅ Purchase successful");
     } catch (error: any) {
       if (error.userCancelled) {
-        console.log("⚠️ Purchase cancelled by user");
         // NE throw-uj error ako je korisnik otkazao
         return; // ili throw error da UI zna
       }
@@ -145,7 +136,6 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
     try {
       const info = await Purchases.restorePurchases();
       setIsPremium(isPremiumFromInfo(info));
-      console.log("✅ Purchases restored");
     } catch (error) {
       console.error("❌ Restore error:", error);
       throw error;

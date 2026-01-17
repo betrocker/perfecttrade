@@ -227,7 +227,6 @@ export default function DefaultChecklist() {
     // Reset checklist after save
     setCheckedItems(new Set());
     setSelectedTimeframe("weekly");
-    console.log("✅ Checklist reset");
   };
 
   // Track checked items and convert to confluence data
@@ -290,7 +289,6 @@ export default function DefaultChecklist() {
     });
 
     setConfluenceItemsData(items);
-    console.log("✅ Confluence items updated:", items.length);
   }, [checkedItems]);
 
   const handleTimeframeChange = (timeframe: Timeframe) => {

@@ -35,7 +35,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
     } catch (error) {
-      console.log("Session check failed, assuming logged out:", error);
       setSession(null);
       setUser(null);
     } finally {
@@ -100,7 +99,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error: any) {
       // Retry on network errors
       if (retries > 0 && error.message?.includes("Network request failed")) {
-        console.log(`Network error, retrying... (${retries} attempts left)`);
         await new Promise((resolve) => setTimeout(resolve, 1000));
         return signIn(email, password, retries - 1);
       }

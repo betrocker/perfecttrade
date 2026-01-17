@@ -7,7 +7,6 @@ let initPromise: Promise<void> | null = null;
 export async function initRevenueCat() {
   // Sprečava višestruku inicijalizaciju
   if (isInitialized) {
-    console.log("✅ RevenueCat already initialized");
     return;
   }
 
@@ -22,7 +21,6 @@ export async function initRevenueCat() {
         apiKey: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY!,
       });
       isInitialized = true;
-      console.log("✅ RevenueCat initialized");
     } catch (error) {
       console.error("❌ RevenueCat init error:", error);
       initPromise = null;
@@ -39,12 +37,10 @@ let currentUserId: string | null = null;
 export async function revenueCatLogin(supabaseUserId: string) {
   // Spreči duplicirane login pozive
   if (currentUserId === supabaseUserId) {
-    console.log("✅ Already logged in as", supabaseUserId);
     return;
   }
 
   if (isLoggingIn) {
-    console.log("⏳ Login already in progress");
     return;
   }
 
@@ -52,11 +48,9 @@ export async function revenueCatLogin(supabaseUserId: string) {
     isLoggingIn = true;
     await Purchases.logIn(supabaseUserId);
     currentUserId = supabaseUserId;
-    console.log("✅ RevenueCat logged in:", supabaseUserId);
   } catch (error: any) {
     // Ignoriši concurrent request error
     if (error.code === 16 && error.info?.backendErrorCode === 7638) {
-      console.log("⚠️ Concurrent login blocked (normal behavior)");
       currentUserId = supabaseUserId;
       return;
     }
@@ -71,7 +65,6 @@ export async function revenueCatLogout() {
   try {
     await Purchases.logOut();
     currentUserId = null;
-    console.log("✅ RevenueCat logged out");
   } catch (error) {
     console.error("❌ RevenueCat logout error:", error);
   }

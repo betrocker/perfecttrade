@@ -49,7 +49,6 @@ export function NotificationProvider({
         console.log("Received notification:", notification);
       },
       (response) => {
-        console.log("User tapped notification:", response);
         // Handle navigation based on notification type
         const data = response.notification.request.content.data;
         // You can add navigation logic here
