@@ -27,7 +27,7 @@ import {
   View,
 } from "react-native";
 
-import { usePremium } from "@/context/PremiumContext"; // prilagodi putanju ako ti nije /src
+import { usePremium } from "@/context/PremiumContext";
 import { useRouter } from "expo-router";
 
 export default function HomeScreen() {
@@ -106,7 +106,9 @@ export default function HomeScreen() {
         });
       }
     } catch (error) {
-      console.error("Error loading dashboard data:", error);
+      if (__DEV__) {
+        console.error("Error loading dashboard data:", error);
+      }
       // Prikaži prazne stats umesto beskonačnog loading-a
       setStats(null);
       setLoading(false);
@@ -120,14 +122,22 @@ export default function HomeScreen() {
     }, [user, currentMonth, isPremium])
   );
 
-  // useEffect(() => {
-  //   if (user) {
-  //     loadDashboardData();
-  //   }
-  // }, [user, currentMonth, isPremium]);
+  // Safe helper function za formatiranje datuma
+  const safeFormatDate = (dateString: string | null | undefined): string => {
+    if (!dateString) return "N/A";
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch {
+      return "N/A";
+    }
+  };
 
   // Helper function to get currency flag emoji
   const getCurrencyFlag = (currency: string): string => {
+    if (!currency || typeof currency !== "string") {
+      return "🏳️";
+    }
+
     const flagMap: Record<string, string> = {
       USD: "🇺🇸",
       EUR: "🇪🇺",
@@ -151,7 +161,18 @@ export default function HomeScreen() {
       RUB: "🇷🇺",
     };
 
-    return flagMap[currency] || "🏳️";
+    return flagMap[currency.toUpperCase()] || "🏳️";
+  };
+
+  // Safe helper za currency pair split
+  const safeSplitCurrencyPair = (
+    currencyPair: string | undefined
+  ): [string, string] => {
+    if (!currencyPair || typeof currencyPair !== "string") {
+      return ["USD", "EUR"];
+    }
+    const parts = currencyPair.split("/");
+    return [parts[0] || "USD", parts[1] || "EUR"];
   };
 
   // Calendar helper functions
@@ -346,6 +367,10 @@ export default function HomeScreen() {
                   iconColor = "#EF4444";
                 }
 
+                const [baseCurrency, quoteCurrency] = safeSplitCurrencyPair(
+                  trade.currency_pair
+                );
+
                 return (
                   <View
                     key={trade.id}
@@ -366,10 +391,10 @@ export default function HomeScreen() {
                         </View>
                         <View>
                           <Text className="text-txt-secondary text-xs mb-1">
-                            {trade.currency_pair.split("/").join(" / ")}
+                            {baseCurrency} / {quoteCurrency}
                           </Text>
                           <Text className="text-txt-primary text-xl font-bold">
-                            {trade.currency_pair}
+                            {trade.currency_pair || "N/A"}
                           </Text>
                           <Text className="text-txt-secondary text-sm">
                             {trade.direction}
@@ -424,14 +449,19 @@ export default function HomeScreen() {
     );
   }
 
-  // Get recent trades (last 5 closed trades)
-  const recentTrades = Object.values(tradingDays)
-    .flatMap((day) => day.trades)
-    .sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    )
-    .slice(0, 5);
+  // Get recent trades (last 5 closed trades) - SAFE VERSION
+  const recentTrades =
+    isPremium && Object.keys(tradingDays).length > 0
+      ? Object.values(tradingDays)
+          .flatMap((day) => day.trades)
+          .filter((trade) => trade && trade.created_at) // Filter invalid trades
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime()
+          )
+          .slice(0, 5)
+      : [];
 
   return (
     <ScrollView className="flex-1 bg-bg-primary">
@@ -621,11 +651,15 @@ export default function HomeScreen() {
 
                 <View className="flex-row items-center mb-4">
                   <Text className="text-base">
-                    {getCurrencyFlag(performingPairs.best.pair.split("/")[0])}
+                    {getCurrencyFlag(
+                      safeSplitCurrencyPair(performingPairs.best.pair)[0]
+                    )}
                   </Text>
                   <Text className="text-base text-txt-secondary mr-1">/</Text>
                   <Text className="text-base mr-2">
-                    {getCurrencyFlag(performingPairs.best.pair.split("/")[1])}
+                    {getCurrencyFlag(
+                      safeSplitCurrencyPair(performingPairs.best.pair)[1]
+                    )}
                   </Text>
                   <Text className="text-txt-primary text-2xl font-bold">
                     {performingPairs.best.pair}
@@ -670,11 +704,15 @@ export default function HomeScreen() {
 
                 <View className="flex-row items-center mb-4">
                   <Text className="text-base">
-                    {getCurrencyFlag(performingPairs.worst.pair.split("/")[0])}
+                    {getCurrencyFlag(
+                      safeSplitCurrencyPair(performingPairs.worst.pair)[0]
+                    )}
                   </Text>
                   <Text className="text-base text-txt-secondary mr-1">/</Text>
                   <Text className="text-base mr-2">
-                    {getCurrencyFlag(performingPairs.worst.pair.split("/")[1])}
+                    {getCurrencyFlag(
+                      safeSplitCurrencyPair(performingPairs.worst.pair)[1]
+                    )}
                   </Text>
                   <Text className="text-txt-primary text-2xl font-bold">
                     {performingPairs.worst.pair}
@@ -777,7 +815,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Recent Trades (FREE - ali ovde u ovoj verziji je prazno za non-premium jer tradingDays ne učitavamo) */}
+        {/* Recent Trades (PREMIUM) */}
         {recentTrades.length > 0 && (
           <View className="bg-bg-secondary rounded-2xl p-4 mb-4">
             <View className="flex-row items-center mb-4">
@@ -809,6 +847,10 @@ export default function HomeScreen() {
                 iconColor = "#EF4444";
               }
 
+              const [baseCurrency, quoteCurrency] = safeSplitCurrencyPair(
+                trade.currency_pair
+              );
+
               return (
                 <View
                   key={trade.id}
@@ -829,20 +871,20 @@ export default function HomeScreen() {
                     <View className="flex-1">
                       <View className="flex-row items-center mb-1">
                         <Text className="text-base mr-1">
-                          {getCurrencyFlag(trade.currency_pair.split("/")[0])}
+                          {getCurrencyFlag(baseCurrency)}
                         </Text>
                         <Text className="text-base text-txt-secondary mr-1">
                           /
                         </Text>
                         <Text className="text-base mr-2">
-                          {getCurrencyFlag(trade.currency_pair.split("/")[1])}
+                          {getCurrencyFlag(quoteCurrency)}
                         </Text>
                         <Text className="text-txt-primary text-base font-bold">
-                          {trade.currency_pair}
+                          {trade.currency_pair || "N/A"}
                         </Text>
                       </View>
                       <Text className="text-txt-secondary text-xs">
-                        {new Date(trade.created_at).toLocaleDateString()}
+                        {safeFormatDate(trade.created_at)}
                       </Text>
                     </View>
                   </View>
@@ -858,7 +900,7 @@ export default function HomeScreen() {
         )}
 
         {/* Monthly P&L Chart (PREMIUM) */}
-        {isPremium && monthlyPnL.length > 0 && (
+        {isPremium && monthlyPnL && monthlyPnL.length > 0 && (
           <View className="bg-bg-secondary rounded-2xl p-4 mb-4">
             <Text className="text-txt-primary text-lg font-bold mb-2">
               Monthly P&L

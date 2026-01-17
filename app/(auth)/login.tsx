@@ -46,18 +46,58 @@ export default function LoginScreen() {
     }
   };
 
-  const testConnection = async () => {
-    try {
-      const { data, error } = await supabase.auth.getSession();
-      Alert.alert(
-        "Test Result",
-        error
-          ? `Error: ${error.message}`
-          : `Success! Session: ${data.session ? "Active" : "None"}`
-      );
-    } catch (err: any) {
-      Alert.alert("Test Failed", err.message);
-    }
+  const handleForgotPassword = () => {
+    Alert.prompt(
+      "Reset Password",
+      "Enter your email address to receive a password reset link",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Send Link",
+          onPress: async (inputEmail?: string) => {
+            const emailToReset = inputEmail?.trim() || email.trim();
+
+            if (!emailToReset) {
+              Alert.alert("Error", "Please enter your email address");
+              return;
+            }
+
+            // Validate email format
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(emailToReset)) {
+              Alert.alert("Error", "Please enter a valid email address");
+              return;
+            }
+
+            try {
+              const { error } = await supabase.auth.resetPasswordForEmail(
+                emailToReset,
+                {
+                  redirectTo: "perfecttrade://reset-password", // Deep link za tvoj app
+                }
+              );
+
+              if (error) {
+                Alert.alert("Error", error.message);
+              } else {
+                Alert.alert(
+                  "Check Your Email",
+                  `We've sent a password reset link to ${emailToReset}. Please check your inbox and follow the instructions.`,
+                  [{ text: "OK" }]
+                );
+              }
+            } catch (error: any) {
+              Alert.alert(
+                "Error",
+                "Failed to send reset email. Please try again."
+              );
+            }
+          },
+        },
+      ],
+      "plain-text",
+      email || "" // Pre-popuni sa email-om ako je već unet
+    );
   };
 
   return (
@@ -79,7 +119,7 @@ export default function LoginScreen() {
         className="bg-bg-secondary text-txt-primary rounded-lg px-4 py-4 mb-4 border border-border"
       />
 
-      <View className="relative mb-6">
+      <View className="relative mb-2">
         <TextInput
           placeholder="Password"
           placeholderTextColor="#8B95A5"
@@ -101,6 +141,17 @@ export default function LoginScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Forgot Password Link */}
+      <TouchableOpacity
+        onPress={handleForgotPassword}
+        className="mb-6"
+        activeOpacity={0.7}
+      >
+        <Text className="text-accent-cyan text-right text-sm">
+          Forgot Password?
+        </Text>
+      </TouchableOpacity>
+
       <TouchableOpacity
         onPress={handleLogin}
         disabled={loading}
@@ -115,12 +166,6 @@ export default function LoginScreen() {
         <Text className="text-txt-secondary text-center">
           Don't have an account?{" "}
           <Text className="text-accent-cyan font-bold">Sign Up</Text>
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={testConnection} className="mt-2">
-        <Text className="text-txt-tertiary text-center text-sm">
-          [TEST] Check Connection
         </Text>
       </TouchableOpacity>
     </View>
