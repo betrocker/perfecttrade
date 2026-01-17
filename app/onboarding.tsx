@@ -1,3 +1,5 @@
+// screens/Onboarding.tsx
+import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -7,7 +9,6 @@ import {
   Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  ScrollView,
   Text,
   TouchableOpacity,
   View,
@@ -20,7 +21,9 @@ type Page = {
   key: string;
   title: string;
   subtitle: string;
-  emoji: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  features?: string[];
 };
 
 export default function Onboarding() {
@@ -31,41 +34,47 @@ export default function Onboarding() {
     () => [
       {
         key: "p1",
-        title: "Log every trade\nin seconds",
+        title: "Track Every Trade\nLike a Pro",
         subtitle:
-          "Capture entry, exit, size, strategy and notes fast — so you never lose context.",
-        emoji: "🧾",
+          "Log entry, exit, position size and notes in seconds. Never lose your trading context.",
+        icon: "newspaper-outline",
+        color: "#00F5D4",
+        features: ["Quick entry", "Smart tags", "Cloud sync"],
       },
       {
         key: "p2",
-        title: "Review faster\nwith screenshots",
+        title: "Build Your Edge\nWith Checklists",
         subtitle:
-          "Attach charts and mark your thesis so you can spot what worked and what didn’t.",
-        emoji: "📸",
+          "Multi-timeframe confluence system. 70+ criteria across Weekly → Daily → 4H → Entry.",
+        icon: "checkmark-done-circle",
+        color: "#06B6D4",
+        features: ["Structured process", "Higher win rate", "Risk control"],
       },
       {
         key: "p3",
-        title: "Improve with\nsmart analytics",
+        title: "Improve with\nReal Analytics",
         subtitle:
-          "Track win rate, expectancy, best setups and mistakes — and trade with a plan.",
-        emoji: "📊",
+          "Win rate, profit factor, drawdown, and setup performance. See what actually works.",
+        icon: "analytics",
+        color: "#10B981",
+        features: ["Win rate tracking", "Setup analysis", "Profit factor"],
+      },
+      {
+        key: "p4",
+        title: "Start Your\nFree Trial",
+        subtitle:
+          "3 days free, then $79.99/year. Cancel anytime. Join traders who stay disciplined.",
+        icon: "rocket",
+        color: "#F59E0B",
+        features: ["Unlimited trades", "Custom checklists", "Advanced stats"],
       },
     ],
     []
   );
 
   const listRef = useRef<Animated.FlatList<Page>>(null);
-
-  // kontinuirani scroll
   const scrollX = useRef(new Animated.Value(0)).current;
-
-  // koristi se samo za CTA/login logiku
   const [index, setIndex] = useState(0);
-
-  const finish = async () => {
-    await AsyncStorage.setItem("hasOnboarded", "1");
-    router.replace("/");
-  };
 
   const goTo = (i: number) => {
     const clamped = Math.max(0, Math.min(i, pages.length - 1));
@@ -77,16 +86,15 @@ export default function Onboarding() {
     setIndex(nextIndex);
   };
 
-  const ctaText = index === pages.length - 1 ? "Sign up" : "Continue";
-  const topRightText = index === pages.length - 1 ? "Later" : "Skip";
+  const isLastSlide = index === pages.length - 1;
+  const ctaText = isLastSlide ? "Sign up" : "Continue";
+  const topRightText = isLastSlide ? "Later" : "Skip";
 
   const onCtaPress = async () => {
-    if (index < pages.length - 1) {
+    if (!isLastSlide) {
       goTo(index + 1);
       return;
     }
-
-    // poslednji slajd -> idi na register
     await AsyncStorage.setItem("hasOnboarded", "1");
     router.replace("/(auth)/register");
   };
@@ -96,28 +104,22 @@ export default function Onboarding() {
     router.replace("/(auth)/login");
   };
 
-  // ===== TOP-LEFT INDICATOR (___ . . . ) sa MORPH-om =====
+  // ===== ORIGINAL TOP-LEFT INDICATOR =====
   const slotW = 18;
   const gap = 6;
   const dotSize = 4;
-
   const barW = 18;
   const barH = 4;
 
   const totalSlotsW = pages.length * slotW + (pages.length - 1) * gap;
-
-  // progress = scrollX / W (0..N-1 kontinuirano)
   const progress = Animated.divide(scrollX, W);
 
-  // baseTranslate: pomera se po slotovima kontinuirano
   const baseTranslateX = progress.interpolate({
     inputRange: pages.map((_, i) => i),
     outputRange: pages.map((_, i) => i * (slotW + gap)),
     extrapolate: "clamp",
   });
 
-  // frac = progress % 1  (0..1) — dobijamo preko 0..1..2.. mapiranja po segmentima
-  // napravi “saw” talas: za svaki segment [i, i+1] mapiraj na [0,1]
   const frac = progress.interpolate({
     inputRange: pages.flatMap((_, i) =>
       i === pages.length - 1 ? [i] : [i, i + 1]
@@ -128,14 +130,12 @@ export default function Onboarding() {
     extrapolate: "clamp",
   });
 
-  // morph: raste do sredine swipe-a pa se vraća (0->0.5->1 : 1->max->1)
   const scaleX = frac.interpolate({
     inputRange: [0, 0.5, 1],
     outputRange: [1, 2.5, 1],
     extrapolate: "clamp",
   });
 
-  // dot opacity: dot na trenutnoj poziciji nestaje, ali se vraća čim napustiš
   const dotOpacityFor = (i: number) =>
     scrollX.interpolate({
       inputRange: [(i - 1) * W, i * W, (i + 1) * W],
@@ -144,13 +144,15 @@ export default function Onboarding() {
     });
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#2252B5" }}>
+    <View style={{ flex: 1, backgroundColor: "#1B2838" }}>
       <LinearGradient
-        colors={["#3A6CF3", "#2252B5"]}
+        colors={["#1B2838", "#0f1722"]}
         style={{ position: "absolute", left: 0, top: 0, width: W, height: H }}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
       />
 
-      {/* TOP-LEFT INDICATOR */}
+      {/* TOP-LEFT INDICATOR (original) */}
       <View
         style={{
           position: "absolute",
@@ -192,7 +194,7 @@ export default function Onboarding() {
           ))}
         </View>
 
-        {/* ACTIVE BAR (translate + morph scaleX) */}
+        {/* ACTIVE BAR */}
         <Animated.View
           style={{
             position: "absolute",
@@ -215,7 +217,7 @@ export default function Onboarding() {
         </Animated.View>
       </View>
 
-      {/* TOP-RIGHT SKIP/LATER */}
+      {/* TOP-RIGHT SKIP (original) */}
       <TouchableOpacity
         onPress={onSkipPress}
         style={{
@@ -245,70 +247,135 @@ export default function Onboarding() {
         onMomentumScrollEnd={onMomentumEnd}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-          {
-            useNativeDriver: true,
-          }
+          { useNativeDriver: true }
         )}
         getItemLayout={(_, i) => ({ length: W, offset: W * i, index: i })}
-        renderItem={({ item }) => (
-          <View style={{ width: W, flex: 1 }}>
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{
-                flexGrow: 1,
-                justifyContent: "center",
-                paddingTop: insets.top + 70,
-                paddingBottom: insets.bottom + 170,
-                paddingHorizontal: 28,
-              }}
-            >
-              <Text
-                style={{
-                  color: "#FFFFFF",
-                  fontSize: 30,
-                  fontWeight: "800",
-                  textAlign: "center",
-                  lineHeight: 36,
-                  marginBottom: 12,
-                }}
-              >
-                {item.title}
-              </Text>
+        renderItem={({ item, index: itemIndex }) => {
+          const inputRange = [
+            (itemIndex - 1) * W,
+            itemIndex * W,
+            (itemIndex + 1) * W,
+          ];
 
-              <Text
-                style={{
-                  color: "rgba(255,255,255,0.85)",
-                  fontSize: 15,
-                  textAlign: "center",
-                }}
-              >
-                {item.subtitle}
-              </Text>
+          const scale = scrollX.interpolate({
+            inputRange,
+            outputRange: [0.8, 1, 0.8],
+            extrapolate: "clamp",
+          });
 
+          const opacity = scrollX.interpolate({
+            inputRange,
+            outputRange: [0.5, 1, 0.5],
+            extrapolate: "clamp",
+          });
+
+          return (
+            <View style={{ width: W, flex: 1 }}>
               <View
                 style={{
-                  height: 280,
-                  marginTop: 30,
-                  alignItems: "center",
+                  flex: 1,
                   justifyContent: "center",
+                  alignItems: "center",
+                  paddingHorizontal: 32,
+                  paddingTop: insets.top + 80,
+                  paddingBottom: insets.bottom + 180,
                 }}
               >
-                <View
+                <Animated.View
                   style={{
-                    width: 260,
-                    height: 260,
-                    borderRadius: 40,
-                    backgroundColor: "rgba(255,255,255,0.08)",
+                    transform: [{ scale }],
+                    opacity,
                     alignItems: "center",
-                    justifyContent: "center",
                   }}
                 >
-                  <Text style={{ fontSize: 56 }}>{item.emoji}</Text>
-                </View>
+                  {/* Icon Circle */}
+                  <View
+                    style={{
+                      width: 120,
+                      height: 120,
+                      borderRadius: 40,
+                      backgroundColor: "rgba(255,255,255,0.1)",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginBottom: 32,
+                      shadowColor: item.color,
+                      shadowOffset: { width: 0, height: 8 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 16,
+                    }}
+                  >
+                    <Ionicons name={item.icon} size={56} color={item.color} />
+                  </View>
+
+                  {/* Title */}
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 36,
+                      fontWeight: "800",
+                      textAlign: "center",
+                      lineHeight: 44,
+                      marginBottom: 16,
+                    }}
+                  >
+                    {item.title}
+                  </Text>
+
+                  {/* Subtitle */}
+                  <Text
+                    style={{
+                      color: "rgba(255,255,255,0.7)",
+                      fontSize: 16,
+                      textAlign: "center",
+                      lineHeight: 24,
+                      marginBottom: 32,
+                      paddingHorizontal: 8,
+                    }}
+                  >
+                    {item.subtitle}
+                  </Text>
+
+                  {/* Features */}
+                  {item.features && (
+                    <View style={{ gap: 12 }}>
+                      {item.features.map((feature, idx) => (
+                        <View
+                          key={idx}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            backgroundColor: "rgba(0, 245, 212, 0.1)",
+                            paddingHorizontal: 16,
+                            paddingVertical: 10,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: "rgba(0, 245, 212, 0.2)",
+                          }}
+                        >
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={20}
+                            color="#00F5D4"
+                            style={{ marginRight: 8 }}
+                          />
+                          <Text
+                            style={{
+                              color: "#E5E7EB",
+                              fontSize: 14,
+                              fontWeight: "600",
+                            }}
+                          >
+                            {feature}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </Animated.View>
               </View>
-            </ScrollView>
-          </View>
-        )}
+            </View>
+          );
+        }}
       />
 
       {/* BOTTOM CTA */}
@@ -331,12 +398,12 @@ export default function Onboarding() {
             alignItems: "center",
           }}
         >
-          <Text style={{ color: "#1E2A5D", fontWeight: "700", fontSize: 16 }}>
+          <Text style={{ color: "#1B2838", fontWeight: "700", fontSize: 16 }}>
             {ctaText}
           </Text>
         </TouchableOpacity>
 
-        {index === pages.length - 1 && (
+        {isLastSlide && (
           <TouchableOpacity
             onPress={() => router.replace("/(auth)/login")}
             style={{ alignItems: "center", marginTop: 16 }}

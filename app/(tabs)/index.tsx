@@ -1,5 +1,6 @@
 import GoalsProgressCard from "@/components/GoalsProgressCard";
 import { useAuth } from "@/context/AuthContext";
+import { fetchWithRetry } from "@/lib/fetchUtils";
 import {
   GoalsProgress,
   goalsTrackingService,
@@ -16,7 +17,7 @@ import {
 import { Trade } from "@/types/trade";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -59,46 +60,55 @@ export default function HomeScreen() {
     if (!user) return;
 
     setLoading(true);
+
     try {
-      const year = currentMonth.getFullYear();
-      const month = currentMonth.getMonth();
+      // FAZA 1: Učitaj osnovne stats (FREE) prvo
+      const statsData = await fetchWithRetry(
+        () => dashboardService.getDashboardStats(user.id),
+        3,
+        10000
+      );
 
-      const goalsData = await goalsTrackingService.getGoalsProgress(user.id);
-      setGoalsProgress(goalsData);
-
-      const [statsData, tradingDaysData, pairsData, monthlyData, weeklyData] =
-        await Promise.all([
-          dashboardService.getDashboardStats(user.id),
-
-          // premium-only data
-          isPremium
-            ? dashboardService.getTradingDays(user.id, year, month)
-            : Promise.resolve({} as Record<string, TradingDay>),
-
-          isPremium
-            ? dashboardService.getPerformingPairs(user.id)
-            : Promise.resolve({ best: null, worst: null } as {
-                best: PerformingPair | null;
-                worst: PerformingPair | null;
-              }),
-
-          isPremium
-            ? dashboardService.getMonthlyPnL(user.id, 6)
-            : Promise.resolve([] as MonthlyPnL[]),
-
-          isPremium
-            ? dashboardService.getWeeklySummary(user.id, year, month)
-            : Promise.resolve([] as WeeklySummary[]),
-        ]);
+      const goalsData = await fetchWithRetry(
+        () => goalsTrackingService.getGoalsProgress(user.id),
+        3,
+        10000
+      );
 
       setStats(statsData);
-      setTradingDays(tradingDaysData);
-      setPerformingPairs(pairsData);
-      setMonthlyPnL(monthlyData);
-      setWeeklySummary(weeklyData);
+      setGoalsProgress(goalsData);
+      setLoading(false); // Odmah prikaži osnovne podatke
+
+      // FAZA 2: Učitaj premium podatke postepeno (ako je premium)
+      if (isPremium) {
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth();
+
+        // Postepeno učitavanje bez blokiranja UI-a
+        Promise.allSettled([
+          fetchWithRetry(() =>
+            dashboardService.getTradingDays(user.id, year, month)
+          ),
+          fetchWithRetry(() => dashboardService.getPerformingPairs(user.id)),
+          fetchWithRetry(() => dashboardService.getMonthlyPnL(user.id, 6)),
+          fetchWithRetry(() =>
+            dashboardService.getWeeklySummary(user.id, year, month)
+          ),
+        ]).then((results) => {
+          if (results[0].status === "fulfilled")
+            setTradingDays(results[0].value);
+          if (results[1].status === "fulfilled")
+            setPerformingPairs(results[1].value);
+          if (results[2].status === "fulfilled")
+            setMonthlyPnL(results[2].value);
+          if (results[3].status === "fulfilled")
+            setWeeklySummary(results[3].value);
+        });
+      }
     } catch (error) {
       console.error("Error loading dashboard data:", error);
-    } finally {
+      // Prikaži prazne stats umesto beskonačnog loading-a
+      setStats(null);
       setLoading(false);
     }
   };
@@ -110,11 +120,11 @@ export default function HomeScreen() {
     }, [user, currentMonth, isPremium])
   );
 
-  useEffect(() => {
-    if (user) {
-      loadDashboardData();
-    }
-  }, [user, currentMonth, isPremium]);
+  // useEffect(() => {
+  //   if (user) {
+  //     loadDashboardData();
+  //   }
+  // }, [user, currentMonth, isPremium]);
 
   // Helper function to get currency flag emoji
   const getCurrencyFlag = (currency: string): string => {
@@ -438,7 +448,7 @@ export default function HomeScreen() {
         {goalsProgress && <GoalsProgressCard progress={goalsProgress} />}
 
         {/* Net Profit & Loss Card (FREE) */}
-        <View className="bg-[#1E3A3A] rounded-2xl p-6 mb-4">
+        <View className="bg-dashboard-card-green rounded-2xl p-6 mb-4">
           <View className="flex-row justify-between items-start mb-4">
             <View>
               <Text className="text-txt-secondary text-sm mb-2">
@@ -457,13 +467,13 @@ export default function HomeScreen() {
           </View>
 
           <View className="flex-row justify-between">
-            <View className="bg-[#2A3F54] rounded-xl p-3 flex-1 mr-2">
+            <View className="bg-dashboard-card-blue rounded-xl p-3 flex-1 mr-2">
               <Text className="text-txt-secondary text-xs mb-1">Win Rate</Text>
               <Text className="text-txt-primary text-2xl font-bold">
                 {stats.winRate}%
               </Text>
             </View>
-            <View className="bg-[#2A3F54] rounded-xl p-3 flex-1 mx-2">
+            <View className="bg-dashboard-card-blue rounded-xl p-3 flex-1 mx-2">
               <Text className="text-txt-secondary text-xs mb-1">
                 Profit Factor
               </Text>
@@ -471,7 +481,7 @@ export default function HomeScreen() {
                 {stats.profitFactor}
               </Text>
             </View>
-            <View className="bg-[#2A3F54] rounded-xl p-3 flex-1 ml-2">
+            <View className="bg-dashboard-card-blue rounded-xl p-3 flex-1 ml-2">
               <Text className="text-txt-secondary text-xs mb-1">
                 Avg.Confluence
               </Text>
@@ -484,7 +494,7 @@ export default function HomeScreen() {
 
         {/* Profit/Loss Cards Row (FREE) */}
         <View className="flex-row mb-4">
-          <View className="bg-[#1E3A3A] rounded-2xl p-4 flex-1 mr-2">
+          <View className="bg-dashboard-card-green rounded-2xl p-4 flex-1 mr-2">
             <View className="flex-row justify-between items-center mb-2">
               <Text className="text-txt-secondary text-sm">Total Profit</Text>
               <Ionicons name="trending-up" size={20} color="#00F5D4" />
@@ -497,7 +507,7 @@ export default function HomeScreen() {
             </Text>
           </View>
 
-          <View className="bg-[#3D2838] rounded-2xl p-4 flex-1 ml-2">
+          <View className="bg-dashboard-card-red rounded-2xl p-4 flex-1 ml-2">
             <View className="flex-row justify-between items-center mb-2">
               <Text className="text-txt-secondary text-sm">Total Loss</Text>
               <Ionicons name="trending-down" size={20} color="#EF4444" />
@@ -513,7 +523,7 @@ export default function HomeScreen() {
 
         {/* Stats Cards Grid (FREE) */}
         <View className="flex-row flex-wrap justify-between mb-4">
-          <View className="bg-[#2A3F54] rounded-2xl p-4 w-[48%] mb-3">
+          <View className="bg-dashboard-card-blue rounded-2xl p-4 w-[48%] mb-3">
             <View className="flex-row items-center">
               <View className="bg-accent-cyan/20 rounded-xl p-3 mr-3">
                 <Ionicons name="ribbon" size={24} color="#00F5D4" />
@@ -529,7 +539,7 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          <View className="bg-[#2A3F54] rounded-2xl p-4 w-[48%] mb-3">
+          <View className="bg-dashboard-card-blue rounded-2xl p-4 w-[48%] mb-3">
             <View className="flex-row items-center">
               <View className="bg-error/20 rounded-xl p-3 mr-3">
                 <Ionicons name="radio-button-on" size={24} color="#EF4444" />
@@ -545,7 +555,7 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          <View className="bg-[#2A3F54] rounded-2xl p-4 w-[48%]">
+          <View className="bg-dashboard-card-blue rounded-2xl p-4 w-[48%]">
             <View className="flex-row items-center">
               <View className="bg-error/20 rounded-xl p-3 mr-3">
                 <Ionicons name="flame" size={24} color="#EF4444" />
@@ -561,7 +571,7 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          <View className="bg-[#2A3F54] rounded-2xl p-4 w-[48%]">
+          <View className="bg-dashboard-card-blue rounded-2xl p-4 w-[48%]">
             <View className="flex-row items-center">
               <View className="bg-info/20 rounded-xl p-3 mr-3">
                 <Ionicons name="pulse" size={24} color="#3B82F6" />
@@ -599,7 +609,7 @@ export default function HomeScreen() {
         {isPremium && (performingPairs.best || performingPairs.worst) && (
           <View className="flex-row mb-4">
             {performingPairs.best && (
-              <View className="bg-[#1E3A3A] rounded-2xl p-4 flex-1 mr-2">
+              <View className="bg-dashboard-card-green rounded-2xl p-4 flex-1 mr-2">
                 <View className="flex-row items-center mb-3">
                   <View className="bg-accent-cyan/20 rounded-full p-2 mr-2">
                     <Ionicons name="trending-up" size={16} color="#00F5D4" />
@@ -648,7 +658,7 @@ export default function HomeScreen() {
             )}
 
             {performingPairs.worst && (
-              <View className="bg-[#3D2838] rounded-2xl p-4 flex-1 ml-2">
+              <View className="bg-dashboard-card-red rounded-2xl p-4 flex-1 ml-2">
                 <View className="flex-row items-center mb-3">
                   <View className="bg-error/20 rounded-full p-2 mr-2">
                     <Ionicons name="trending-down" size={16} color="#EF4444" />

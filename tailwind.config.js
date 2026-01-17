@@ -30,6 +30,12 @@ module.exports = {
         error: "#EF4444",
         warning: "#F59E0B",
         info: "#3B82F6",
+
+        dashboard: {
+          "card-green": "#1E3A3A",
+          "card-blue": "#2A3F54",
+          "card-red": "#3D2838",
+        },
       },
     },
   },
