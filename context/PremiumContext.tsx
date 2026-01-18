@@ -36,10 +36,19 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        // 1. Inicijalizuj RevenueCat SAMO JEDNOM
+        // 1. Inicijalizuj RevenueCat PRVO i ČEKAJ da se završi
         if (!hasInitialized.current) {
-          await initRevenueCat();
-          hasInitialized.current = true;
+          const initialized = await initRevenueCat();
+          hasInitialized.current = initialized; // initRevenueCat sada vraća boolean
+
+          // Ako nije inicijalizovano (nema API key), zaustavi se ovde
+          if (!initialized) {
+            console.warn(
+              "⚠️ RevenueCat not initialized - premium features disabled",
+            );
+            if (mounted) setLoading(false);
+            return;
+          }
         }
 
         // 2. Proveri trenutnu sesiju
@@ -51,22 +60,28 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
           await revenueCatLogin(session.user.id);
         }
 
-        // 3. Preuzmi premium status
-        const info = await Purchases.getCustomerInfo();
-        if (mounted) {
-          setIsPremium(isPremiumFromInfo(info));
-        }
-
-        // 4. Slušaj promene customer info
-        listenerRef.current = Purchases.addCustomerInfoUpdateListener(
-          (info: CustomerInfo) => {
-            if (mounted) {
-              setIsPremium(isPremiumFromInfo(info));
-            }
+        // 3. Preuzmi premium status SAMO AKO JE INICIJALIZOVANO
+        if (hasInitialized.current) {
+          const info = await Purchases.getCustomerInfo();
+          if (mounted) {
+            setIsPremium(isPremiumFromInfo(info));
           }
-        );
+
+          // 4. Slušaj promene customer info
+          listenerRef.current = Purchases.addCustomerInfoUpdateListener(
+            (info: CustomerInfo) => {
+              if (mounted) {
+                setIsPremium(isPremiumFromInfo(info));
+              }
+            },
+          );
+        }
       } catch (error) {
         console.error("❌ PremiumProvider init error:", error);
+        // Nastavi sa app-om čak i ako premium ne radi
+        if (mounted) {
+          setIsPremium(false);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -77,6 +92,7 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
+      if (!hasInitialized.current) return; // Skip ako nije inicijalizovano
 
       try {
         if (event === "SIGNED_IN" && session?.user?.id) {
@@ -99,9 +115,14 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
         listenerRef.current.remove();
       }
     };
-  }, []); // Prazan dependency array - pokreni samo jednom!
+  }, []);
 
   const refresh = async () => {
+    if (!hasInitialized.current) {
+      console.warn("⚠️ RevenueCat not initialized");
+      return;
+    }
+
     try {
       const info = await Purchases.getCustomerInfo();
       setIsPremium(isPremiumFromInfo(info));
@@ -111,6 +132,10 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
   };
 
   const purchase = async () => {
+    if (!hasInitialized.current) {
+      throw new Error("Premium features not available");
+    }
+
     try {
       const offerings = await Purchases.getOfferings();
       const current = offerings.current;
@@ -123,16 +148,18 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
       setIsPremium(isPremiumFromInfo(res.customerInfo));
     } catch (error: any) {
       if (error.userCancelled) {
-        // NE throw-uj error ako je korisnik otkazao
-        return; // ili throw error da UI zna
+        return;
       }
-
       console.error("❌ Purchase error:", error);
-      throw error; // Throw samo prave errore
+      throw error;
     }
   };
 
   const restore = async () => {
+    if (!hasInitialized.current) {
+      throw new Error("Premium features not available");
+    }
+
     try {
       const info = await Purchases.restorePurchases();
       setIsPremium(isPremiumFromInfo(info));
@@ -144,7 +171,7 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(
     () => ({ loading, isPremium, purchase, restore, refresh }),
-    [loading, isPremium]
+    [loading, isPremium],
   );
 
   return (
