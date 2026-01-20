@@ -81,11 +81,28 @@ export async function revenueCatLogout() {
     return;
   }
 
+  // ✅ Samo logout ako NIJE anonymous user
   try {
+    const customerInfo = await Purchases.getCustomerInfo();
+    const isAnonymous =
+      customerInfo.originalAppUserId.startsWith("$RCAnonymousID:");
+
+    if (isAnonymous) {
+      console.log("✅ User is anonymous, skipping logout");
+      currentUserId = null;
+      return;
+    }
+
     await Purchases.logOut();
     currentUserId = null;
     console.log("✅ RevenueCat logout successful");
-  } catch (error) {
+  } catch (error: any) {
+    // Ignoriši "anonymous user" error
+    if (error.code === 22 || error.code === "22") {
+      console.log("✅ Anonymous user logout ignored");
+      currentUserId = null;
+      return;
+    }
     console.error("❌ RevenueCat logout error:", error);
   }
 }
