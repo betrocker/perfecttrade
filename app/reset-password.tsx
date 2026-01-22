@@ -21,20 +21,18 @@ export default function ResetPasswordScreen() {
   const [verifying, setVerifying] = useState(true);
 
   useEffect(() => {
-    // Proveri da li je token prisutan u URL-u
-    const verifyToken = async () => {
+    const verify = async () => {
       try {
-        // URL format: perfecttrade://reset-password?access_token=xxx&refresh_token=xxx&type=recovery
-        const accessToken = params.access_token as string;
-        const refreshToken = params.refresh_token as string;
-        const type = params.type as string;
+        const accessToken = params.access_token as string | undefined;
+        const refreshToken = params.refresh_token as string | undefined;
+        const type = params.type as string | undefined;
 
         console.log("=== RESET PASSWORD PARAMS ===");
         console.log("Access token exists:", !!accessToken);
         console.log("Refresh token exists:", !!refreshToken);
         console.log("Type:", type);
 
-        if (!accessToken || type !== "recovery") {
+        if (!accessToken || !refreshToken || type !== "recovery") {
           Alert.alert(
             "Invalid Link",
             "This password reset link is invalid or has expired. Please request a new one.",
@@ -43,17 +41,16 @@ export default function ResetPasswordScreen() {
           return;
         }
 
-        // Postavi session sa recovery token-om
         const { error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
         });
 
         if (error) {
-          console.error("Session error:", error);
+          console.error("setSession error:", error);
           Alert.alert(
             "Error",
-            "Failed to verify reset link. Please try again.",
+            "Could not verify the reset link. Please request a new one.",
             [{ text: "OK", onPress: () => router.replace("/(auth)/login") }],
           );
           return;
@@ -61,15 +58,15 @@ export default function ResetPasswordScreen() {
 
         console.log("✅ Recovery session verified");
         setVerifying(false);
-      } catch (error) {
-        console.error("Verification error:", error);
+      } catch (e) {
+        console.error("verify error:", e);
         Alert.alert("Error", "Something went wrong. Please try again.", [
           { text: "OK", onPress: () => router.replace("/(auth)/login") },
         ]);
       }
     };
 
-    verifyToken();
+    verify();
   }, [params]);
 
   const handleResetPassword = async () => {
@@ -77,12 +74,10 @@ export default function ResetPasswordScreen() {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
-
     if (newPassword.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters long");
+      Alert.alert("Error", "Password must be at least 6 characters");
       return;
     }
-
     if (newPassword !== confirmPassword) {
       Alert.alert("Error", "Passwords do not match");
       return;
@@ -95,19 +90,16 @@ export default function ResetPasswordScreen() {
       });
 
       if (error) {
-        console.error("Update password error:", error);
+        console.error("updateUser error:", error);
         Alert.alert("Error", error.message);
         return;
       }
 
       Alert.alert("Success", "Your password has been reset successfully!", [
-        {
-          text: "OK",
-          onPress: () => router.replace("/(auth)/login"),
-        },
+        { text: "OK", onPress: () => router.replace("/(auth)/login") },
       ]);
-    } catch (error: any) {
-      console.error("Reset password error:", error);
+    } catch (e) {
+      console.error("reset password error:", e);
       Alert.alert("Error", "Failed to reset password. Please try again.");
     } finally {
       setLoading(false);
@@ -132,14 +124,13 @@ export default function ResetPasswordScreen() {
         Enter your new password
       </Text>
 
-      {/* New Password */}
       <View className="relative mb-4">
         <TextInput
           placeholder="New Password"
           placeholderTextColor="#8B95A5"
+          secureTextEntry={!showPassword}
           value={newPassword}
           onChangeText={setNewPassword}
-          secureTextEntry={!showPassword}
           className="bg-bg-secondary text-txt-primary rounded-lg px-4 py-4 pr-12 border border-border"
         />
         <TouchableOpacity
@@ -155,14 +146,13 @@ export default function ResetPasswordScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Confirm Password */}
       <View className="relative mb-6">
         <TextInput
           placeholder="Confirm New Password"
           placeholderTextColor="#8B95A5"
+          secureTextEntry={!showConfirmPassword}
           value={confirmPassword}
           onChangeText={setConfirmPassword}
-          secureTextEntry={!showConfirmPassword}
           className="bg-bg-secondary text-txt-primary rounded-lg px-4 py-4 pr-12 border border-border"
         />
         <TouchableOpacity
@@ -181,7 +171,9 @@ export default function ResetPasswordScreen() {
       <TouchableOpacity
         onPress={handleResetPassword}
         disabled={loading}
-        className={`rounded-lg py-4 mb-4 ${loading ? "bg-bg-secondary" : "bg-accent-cyan"}`}
+        className={`rounded-lg py-4 mb-4 ${
+          loading ? "bg-bg-secondary" : "bg-accent-cyan"
+        }`}
       >
         <Text className="text-bg-primary text-center font-bold text-lg">
           {loading ? "Resetting..." : "Reset Password"}

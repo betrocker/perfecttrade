@@ -1,8 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
@@ -15,7 +18,9 @@ export default function TabsLayout() {
           marginHorizontal: 16,
           marginBottom: Platform.OS === "ios" ? 20 : 16,
           height: 70,
-          paddingBottom: 10,
+          // ✅ DODAJ OVO - safe area padding za Android
+          paddingBottom:
+            Platform.OS === "android" ? Math.max(insets.bottom, 10) : 10,
           paddingTop: 10,
           elevation: 0,
           shadowColor: "#000",

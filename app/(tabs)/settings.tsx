@@ -49,7 +49,7 @@ export default function SettingsScreen() {
   useFocusEffect(
     useCallback(() => {
       loadSettings();
-    }, [user])
+    }, [user]),
   );
 
   const editMonthlyTarget = () => {
@@ -67,14 +67,14 @@ export default function SettingsScreen() {
             if (isNaN(numValue) || numValue < 0) {
               Alert.alert(
                 "Invalid Input",
-                "Please enter a valid positive number"
+                "Please enter a valid positive number",
               );
               return;
             }
 
             const success = await userSettingsService.updateMonthlyTarget(
               user.id,
-              numValue
+              numValue,
             );
             if (success) {
               setSettings({ ...settings, monthly_target: numValue });
@@ -85,7 +85,7 @@ export default function SettingsScreen() {
         },
       ],
       "plain-text",
-      settings.monthly_target.toString()
+      settings.monthly_target.toString(),
     );
   };
 
@@ -104,14 +104,14 @@ export default function SettingsScreen() {
             if (isNaN(numValue) || numValue < 0) {
               Alert.alert(
                 "Invalid Input",
-                "Please enter a valid positive number"
+                "Please enter a valid positive number",
               );
               return;
             }
 
             const success = await userSettingsService.updateMaxDailyLoss(
               user.id,
-              numValue
+              numValue,
             );
             if (success) {
               setSettings({ ...settings, max_daily_loss: numValue });
@@ -122,7 +122,7 @@ export default function SettingsScreen() {
         },
       ],
       "plain-text",
-      settings.max_daily_loss.toString()
+      settings.max_daily_loss.toString(),
     );
   };
 
@@ -141,14 +141,14 @@ export default function SettingsScreen() {
             if (isNaN(numValue) || numValue < 0 || numValue > 100) {
               Alert.alert(
                 "Invalid Input",
-                "Please enter a percentage between 0-100"
+                "Please enter a percentage between 0-100",
               );
               return;
             }
 
             const success = await userSettingsService.updateWinRateGoal(
               user.id,
-              numValue
+              numValue,
             );
             if (success) {
               setSettings({ ...settings, win_rate_goal: numValue });
@@ -159,7 +159,7 @@ export default function SettingsScreen() {
         },
       ],
       "plain-text",
-      settings.win_rate_goal.toString()
+      settings.win_rate_goal.toString(),
     );
   };
 
@@ -178,14 +178,14 @@ export default function SettingsScreen() {
             if (isNaN(numValue) || numValue < 0) {
               Alert.alert(
                 "Invalid Input",
-                "Please enter a valid positive number"
+                "Please enter a valid positive number",
               );
               return;
             }
 
             const success = await userSettingsService.updateMaxTradesPerDay(
               user.id,
-              numValue
+              numValue,
             );
             if (success) {
               setSettings({ ...settings, max_trades_per_day: numValue });
@@ -196,7 +196,7 @@ export default function SettingsScreen() {
         },
       ],
       "plain-text",
-      settings.max_trades_per_day.toString()
+      settings.max_trades_per_day.toString(),
     );
   };
 
@@ -208,7 +208,7 @@ export default function SettingsScreen() {
       if (!granted) {
         Alert.alert(
           "Permission Required",
-          "Please enable notifications in settings to use reminders."
+          "Please enable notifications in settings to use reminders.",
         );
         return;
       }
@@ -216,7 +216,7 @@ export default function SettingsScreen() {
 
     const success = await userSettingsService.updateDailyReminder(
       user.id,
-      enabled
+      enabled,
     );
 
     if (success) {
@@ -234,7 +234,7 @@ export default function SettingsScreen() {
 
     const success = await userSettingsService.updateInactivityReminder(
       user.id,
-      enabled
+      enabled,
     );
     if (success) {
       setSettings({ ...settings, inactivity_reminder_enabled: enabled });
@@ -295,13 +295,13 @@ export default function SettingsScreen() {
 
                       // Delete user from auth
                       const { error } = await supabase.auth.admin.deleteUser(
-                        user.id
+                        user.id,
                       );
 
                       if (error) {
                         Alert.alert(
                           "Error",
-                          "Failed to delete account. Please contact support."
+                          "Failed to delete account. Please contact support.",
                         );
                         console.error("Delete account error:", error);
                       } else {
@@ -312,17 +312,17 @@ export default function SettingsScreen() {
                       console.error("Delete account error:", error);
                       Alert.alert(
                         "Error",
-                        "An error occurred. Please try again."
+                        "An error occurred. Please try again.",
                       );
                     }
                   },
                 },
               ],
-              "plain-text"
+              "plain-text",
             );
           },
         },
-      ]
+      ],
     );
   };
 
@@ -347,13 +347,13 @@ export default function SettingsScreen() {
               if (error) {
                 Alert.alert(
                   "Error",
-                  "Failed to delete trades. Please try again."
+                  "Failed to delete trades. Please try again.",
                 );
                 console.error("Delete all trades error:", error);
               } else {
                 Alert.alert(
                   "Success",
-                  "All trades have been deleted successfully."
+                  "All trades have been deleted successfully.",
                 );
               }
             } catch (error) {
@@ -362,43 +362,112 @@ export default function SettingsScreen() {
             }
           },
         },
-      ]
+      ],
     );
   };
 
   const handleChangePassword = () => {
+    let currentPassword = "";
+    let newPassword = "";
+    let confirmPassword = "";
+
+    // Korak 1: Unos trenutne lozinke
     Alert.prompt(
       "Change Password",
-      "Enter your new password",
+      "Enter your current password",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Change",
-          onPress: async (newPassword?: string) => {
-            if (!newPassword || newPassword.length < 6) {
-              Alert.alert(
-                "Invalid Password",
-                "Password must be at least 6 characters long"
-              );
+          text: "Next",
+          onPress: async (current?: string) => {
+            if (!current || current.length < 6) {
+              Alert.alert("Error", "Please enter your current password");
               return;
             }
 
-            const { error } = await supabase.auth.updateUser({
-              password: newPassword,
-            });
+            currentPassword = current;
 
-            if (error) {
-              Alert.alert("Error", error.message);
-            } else {
-              Alert.alert(
-                "Success",
-                "Your password has been changed successfully"
-              );
-            }
+            // Korak 2: Unos nove lozinke
+            Alert.prompt(
+              "New Password",
+              "Enter your new password (min 6 characters)",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Next",
+                  onPress: async (newPass?: string) => {
+                    if (!newPass || newPass.length < 6) {
+                      Alert.alert(
+                        "Invalid Password",
+                        "Password must be at least 6 characters long",
+                      );
+                      return;
+                    }
+
+                    newPassword = newPass;
+
+                    // Korak 3: Potvrda nove lozinke
+                    Alert.prompt(
+                      "Confirm Password",
+                      "Re-enter your new password",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Change",
+                          onPress: async (confirm?: string) => {
+                            if (confirm !== newPassword) {
+                              Alert.alert("Error", "Passwords do not match");
+                              return;
+                            }
+
+                            // Proveri trenutnu lozinku tako što pokušaš relogin
+                            if (!user?.email) {
+                              Alert.alert("Error", "User email not found");
+                              return;
+                            }
+
+                            const { error: signInError } =
+                              await supabase.auth.signInWithPassword({
+                                email: user.email,
+                                password: currentPassword,
+                              });
+
+                            if (signInError) {
+                              Alert.alert(
+                                "Error",
+                                "Current password is incorrect",
+                              );
+                              return;
+                            }
+
+                            // Promeni lozinku
+                            const { error: updateError } =
+                              await supabase.auth.updateUser({
+                                password: newPassword,
+                              });
+
+                            if (updateError) {
+                              Alert.alert("Error", updateError.message);
+                            } else {
+                              Alert.alert(
+                                "Success",
+                                "Your password has been changed successfully",
+                              );
+                            }
+                          },
+                        },
+                      ],
+                      "secure-text",
+                    );
+                  },
+                },
+              ],
+              "secure-text",
+            );
           },
         },
       ],
-      "secure-text"
+      "secure-text",
     );
   };
 
@@ -412,7 +481,7 @@ export default function SettingsScreen() {
     Linking.openURL(mailtoUrl).catch(() => {
       Alert.alert(
         "Error",
-        "Could not open email app. Please email us at: " + email
+        "Could not open email app. Please email us at: " + email,
       );
     });
   };
