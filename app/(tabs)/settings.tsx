@@ -12,9 +12,11 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Modal,
   ScrollView,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -24,6 +26,19 @@ export default function SettingsScreen() {
 
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Modal states
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPasswordInput, setNewPasswordInput] = useState("");
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
+
+  const [inputModalVisible, setInputModalVisible] = useState(false);
+  const [inputModalTitle, setInputModalTitle] = useState("");
+  const [inputModalValue, setInputModalValue] = useState("");
+  const [inputModalType, setInputModalType] = useState<
+    "monthly_target" | "max_daily_loss" | "win_rate_goal" | "max_trades_per_day"
+  >("monthly_target");
 
   const {
     scheduleDailyReminder,
@@ -52,152 +67,137 @@ export default function SettingsScreen() {
     }, [user]),
   );
 
-  const editMonthlyTarget = () => {
-    if (!user || !settings) return;
-
-    Alert.prompt(
-      "Monthly Profit Target",
-      "Enter your monthly profit goal ($)",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Save",
-          onPress: async (value?: string) => {
-            const numValue = parseFloat(value || "0");
-            if (isNaN(numValue) || numValue < 0) {
-              Alert.alert(
-                "Invalid Input",
-                "Please enter a valid positive number",
-              );
-              return;
-            }
-
-            const success = await userSettingsService.updateMonthlyTarget(
-              user.id,
-              numValue,
-            );
-            if (success) {
-              setSettings({ ...settings, monthly_target: numValue });
-            } else {
-              Alert.alert("Error", "Failed to update monthly target");
-            }
-          },
-        },
-      ],
-      "plain-text",
-      settings.monthly_target.toString(),
-    );
+  const openInputModal = (
+    type:
+      | "monthly_target"
+      | "max_daily_loss"
+      | "win_rate_goal"
+      | "max_trades_per_day",
+    title: string,
+    currentValue: string,
+  ) => {
+    setInputModalType(type);
+    setInputModalTitle(title);
+    setInputModalValue(currentValue);
+    setInputModalVisible(true);
   };
 
-  const editMaxDailyLoss = () => {
+  const handleInputModalSubmit = async () => {
     if (!user || !settings) return;
 
-    Alert.prompt(
-      "Max Daily Loss Limit",
-      "Enter maximum loss allowed per day ($)",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Save",
-          onPress: async (value?: string) => {
-            const numValue = parseFloat(value || "0");
-            if (isNaN(numValue) || numValue < 0) {
-              Alert.alert(
-                "Invalid Input",
-                "Please enter a valid positive number",
-              );
-              return;
-            }
+    const numValue =
+      inputModalType === "max_trades_per_day"
+        ? parseInt(inputModalValue || "0")
+        : parseFloat(inputModalValue || "0");
 
-            const success = await userSettingsService.updateMaxDailyLoss(
-              user.id,
-              numValue,
-            );
-            if (success) {
-              setSettings({ ...settings, max_daily_loss: numValue });
-            } else {
-              Alert.alert("Error", "Failed to update max daily loss");
-            }
-          },
-        },
-      ],
-      "plain-text",
-      settings.max_daily_loss.toString(),
-    );
+    if (isNaN(numValue) || numValue < 0) {
+      Alert.alert("Invalid Input", "Please enter a valid positive number");
+      return;
+    }
+
+    if (
+      inputModalType === "win_rate_goal" &&
+      (numValue < 0 || numValue > 100)
+    ) {
+      Alert.alert("Invalid Input", "Please enter a percentage between 0-100");
+      return;
+    }
+
+    let success = false;
+
+    switch (inputModalType) {
+      case "monthly_target":
+        success = await userSettingsService.updateMonthlyTarget(
+          user.id,
+          numValue,
+        );
+        if (success) setSettings({ ...settings, monthly_target: numValue });
+        break;
+      case "max_daily_loss":
+        success = await userSettingsService.updateMaxDailyLoss(
+          user.id,
+          numValue,
+        );
+        if (success) setSettings({ ...settings, max_daily_loss: numValue });
+        break;
+      case "win_rate_goal":
+        success = await userSettingsService.updateWinRateGoal(
+          user.id,
+          numValue,
+        );
+        if (success) setSettings({ ...settings, win_rate_goal: numValue });
+        break;
+      case "max_trades_per_day":
+        success = await userSettingsService.updateMaxTradesPerDay(
+          user.id,
+          numValue,
+        );
+        if (success) setSettings({ ...settings, max_trades_per_day: numValue });
+        break;
+    }
+
+    if (success) {
+      setInputModalVisible(false);
+      setInputModalValue("");
+    } else {
+      Alert.alert("Error", "Failed to update setting");
+    }
   };
 
-  const editWinRateGoal = () => {
-    if (!user || !settings) return;
+  const submitPasswordChange = async () => {
+    if (!currentPassword || !newPasswordInput || !confirmPasswordInput) {
+      Alert.alert("Error", "Please fill in all fields");
+      return;
+    }
 
-    Alert.prompt(
-      "Win Rate Goal",
-      "Enter target win rate percentage (%)",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Save",
-          onPress: async (value?: string) => {
-            const numValue = parseFloat(value || "0");
-            if (isNaN(numValue) || numValue < 0 || numValue > 100) {
-              Alert.alert(
-                "Invalid Input",
-                "Please enter a percentage between 0-100",
-              );
-              return;
-            }
+    if (newPasswordInput.length < 6) {
+      Alert.alert("Error", "Password must be at least 6 characters long");
+      return;
+    }
 
-            const success = await userSettingsService.updateWinRateGoal(
-              user.id,
-              numValue,
-            );
-            if (success) {
-              setSettings({ ...settings, win_rate_goal: numValue });
-            } else {
-              Alert.alert("Error", "Failed to update win rate goal");
-            }
-          },
-        },
-      ],
-      "plain-text",
-      settings.win_rate_goal.toString(),
-    );
-  };
+    if (newPasswordInput !== confirmPasswordInput) {
+      Alert.alert("Error", "Passwords do not match");
+      return;
+    }
 
-  const editMaxTradesPerDay = () => {
-    if (!user || !settings) return;
+    if (!user?.email) {
+      Alert.alert("Error", "User email not found");
+      return;
+    }
 
-    Alert.prompt(
-      "Max Trades Per Day",
-      "Enter maximum number of trades per day",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Save",
-          onPress: async (value?: string) => {
-            const numValue = parseInt(value || "0");
-            if (isNaN(numValue) || numValue < 0) {
-              Alert.alert(
-                "Invalid Input",
-                "Please enter a valid positive number",
-              );
-              return;
-            }
+    try {
+      // Verify current password
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
 
-            const success = await userSettingsService.updateMaxTradesPerDay(
-              user.id,
-              numValue,
-            );
-            if (success) {
-              setSettings({ ...settings, max_trades_per_day: numValue });
-            } else {
-              Alert.alert("Error", "Failed to update max trades per day");
-            }
-          },
-        },
-      ],
-      "plain-text",
-      settings.max_trades_per_day.toString(),
-    );
+      if (signInError) {
+        Alert.alert("Error", "Current password is incorrect");
+        return;
+      }
+
+      // Update password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPasswordInput,
+      });
+
+      if (updateError) {
+        Alert.alert("Error", updateError.message);
+        return;
+      }
+
+      // Reset and close
+      setPasswordModalVisible(false);
+      setCurrentPassword("");
+      setNewPasswordInput("");
+      setConfirmPasswordInput("");
+
+      Alert.alert("Success", "Your password has been changed successfully");
+    } catch (error: any) {
+      console.error("Change password error:", error);
+      Alert.alert("Error", "Failed to change password. Please try again.");
+    }
   };
 
   const toggleDailyReminder = async (enabled: boolean) => {
@@ -258,68 +258,38 @@ export default function SettingsScreen() {
   const handleDeleteAccount = () => {
     Alert.alert(
       "Delete Account",
-      "This action cannot be undone. All your data will be permanently deleted.",
+      "This action cannot be undone. Type DELETE in the confirmation box.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Delete",
+          text: "Continue",
           style: "destructive",
-          onPress: () => {
-            // Ask for confirmation again
-            Alert.prompt(
-              "Confirm Deletion",
-              "Type 'DELETE' to confirm account deletion",
-              [
-                { text: "Cancel", style: "cancel" },
-                {
-                  text: "Confirm",
-                  style: "destructive",
-                  onPress: async (value?: string) => {
-                    if (value !== "DELETE") {
-                      Alert.alert("Cancelled", "Account deletion cancelled");
-                      return;
-                    }
+          onPress: async () => {
+            if (!user) return;
 
-                    if (!user) return;
+            try {
+              await supabase.from("trades").delete().eq("user_id", user.id);
+              await supabase
+                .from("user_settings")
+                .delete()
+                .eq("user_id", user.id);
 
-                    try {
-                      // Delete all user data first
-                      await supabase
-                        .from("trades")
-                        .delete()
-                        .eq("user_id", user.id);
-                      await supabase
-                        .from("user_settings")
-                        .delete()
-                        .eq("user_id", user.id);
+              const { error } = await supabase.auth.admin.deleteUser(user.id);
 
-                      // Delete user from auth
-                      const { error } = await supabase.auth.admin.deleteUser(
-                        user.id,
-                      );
-
-                      if (error) {
-                        Alert.alert(
-                          "Error",
-                          "Failed to delete account. Please contact support.",
-                        );
-                        console.error("Delete account error:", error);
-                      } else {
-                        await signOut();
-                        router.replace("/login");
-                      }
-                    } catch (error) {
-                      console.error("Delete account error:", error);
-                      Alert.alert(
-                        "Error",
-                        "An error occurred. Please try again.",
-                      );
-                    }
-                  },
-                },
-              ],
-              "plain-text",
-            );
+              if (error) {
+                Alert.alert(
+                  "Error",
+                  "Failed to delete account. Please contact support.",
+                );
+                console.error("Delete account error:", error);
+              } else {
+                await signOut();
+                router.replace("/login");
+              }
+            } catch (error) {
+              console.error("Delete account error:", error);
+              Alert.alert("Error", "An error occurred. Please try again.");
+            }
           },
         },
       ],
@@ -366,113 +336,8 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleChangePassword = () => {
-    let currentPassword = "";
-    let newPassword = "";
-    let confirmPassword = "";
-
-    // Korak 1: Unos trenutne lozinke
-    Alert.prompt(
-      "Change Password",
-      "Enter your current password",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Next",
-          onPress: async (current?: string) => {
-            if (!current || current.length < 6) {
-              Alert.alert("Error", "Please enter your current password");
-              return;
-            }
-
-            currentPassword = current;
-
-            // Korak 2: Unos nove lozinke
-            Alert.prompt(
-              "New Password",
-              "Enter your new password (min 6 characters)",
-              [
-                { text: "Cancel", style: "cancel" },
-                {
-                  text: "Next",
-                  onPress: async (newPass?: string) => {
-                    if (!newPass || newPass.length < 6) {
-                      Alert.alert(
-                        "Invalid Password",
-                        "Password must be at least 6 characters long",
-                      );
-                      return;
-                    }
-
-                    newPassword = newPass;
-
-                    // Korak 3: Potvrda nove lozinke
-                    Alert.prompt(
-                      "Confirm Password",
-                      "Re-enter your new password",
-                      [
-                        { text: "Cancel", style: "cancel" },
-                        {
-                          text: "Change",
-                          onPress: async (confirm?: string) => {
-                            if (confirm !== newPassword) {
-                              Alert.alert("Error", "Passwords do not match");
-                              return;
-                            }
-
-                            // Proveri trenutnu lozinku tako što pokušaš relogin
-                            if (!user?.email) {
-                              Alert.alert("Error", "User email not found");
-                              return;
-                            }
-
-                            const { error: signInError } =
-                              await supabase.auth.signInWithPassword({
-                                email: user.email,
-                                password: currentPassword,
-                              });
-
-                            if (signInError) {
-                              Alert.alert(
-                                "Error",
-                                "Current password is incorrect",
-                              );
-                              return;
-                            }
-
-                            // Promeni lozinku
-                            const { error: updateError } =
-                              await supabase.auth.updateUser({
-                                password: newPassword,
-                              });
-
-                            if (updateError) {
-                              Alert.alert("Error", updateError.message);
-                            } else {
-                              Alert.alert(
-                                "Success",
-                                "Your password has been changed successfully",
-                              );
-                            }
-                          },
-                        },
-                      ],
-                      "secure-text",
-                    );
-                  },
-                },
-              ],
-              "secure-text",
-            );
-          },
-        },
-      ],
-      "secure-text",
-    );
-  };
-
   const handleContactSupport = () => {
-    const email = "denis.djordjevic@gmail.com"; // Promeni na svoj email
+    const email = "denis.djordjevic@gmail.com";
     const subject = "Support Request";
     const body = `Hi,\n\nI need help with...\n\n---\nUser ID: ${user?.id}\nApp Version: 1.0.0`;
 
@@ -488,7 +353,7 @@ export default function SettingsScreen() {
 
   const handlePrivacyPolicy = () => {
     try {
-      router.push("/privacy"); // putanja do PrivacyPolicyScreen
+      router.push("/privacy");
     } catch {
       Alert.alert("Error", "Could not open privacy policy screen.");
     }
@@ -496,7 +361,7 @@ export default function SettingsScreen() {
 
   const handleTermsOfService = () => {
     try {
-      router.push("/terms"); // putanja do TermsOfServiceScreen
+      router.push("/terms");
     } catch {
       Alert.alert("Error", "Could not open terms of service screen.");
     }
@@ -512,298 +377,450 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-[#0A0F1A]">
-      <View className="p-4 pb-28">
-        {/* Header */}
-        <Text className="text-txt-primary text-3xl font-bold mb-2 mt-2">
-          Settings
-        </Text>
-
-        {/* Account Section */}
-        <View className="mt-6">
-          <Text className="text-txt-secondary text-md font-semibold uppercase mb-2 px-4">
-            Account
+    <>
+      <ScrollView className="flex-1 bg-[#0A0F1A]">
+        <View className="p-4 pb-28">
+          {/* Header */}
+          <Text className="text-txt-primary text-3xl font-bold mb-2 mt-2">
+            Settings
           </Text>
-          <View className="bg-bg-secondary rounded-2xl overflow-hidden">
-            {/* User Email */}
-            <View className="px-4 py-3 border-b border-bg-primary">
-              <Text className="text-txt-secondary text-xs mb-1">Email</Text>
-              <Text className="text-txt-primary text-base">{user?.email}</Text>
-            </View>
 
-            {/* Change Password */}
-            <TouchableOpacity
-              onPress={handleChangePassword}
-              className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary"
-            >
-              <View className="flex-row items-center flex-1">
-                <View className="bg-accent-cyan/20 rounded-full p-2 mr-3">
-                  <Ionicons name="lock-closed" size={18} color="#00F5D4" />
-                </View>
+          {/* Account Section */}
+          <View className="mt-6">
+            <Text className="text-txt-secondary text-md font-semibold uppercase mb-2 px-4">
+              Account
+            </Text>
+            <View className="bg-bg-secondary rounded-2xl overflow-hidden">
+              <View className="px-4 py-3 border-b border-bg-primary">
+                <Text className="text-txt-secondary text-xs mb-1">Email</Text>
                 <Text className="text-txt-primary text-base">
-                  Change Password
+                  {user?.email}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#8B95A5" />
-            </TouchableOpacity>
 
-            {/* Logout */}
-            <TouchableOpacity
-              onPress={handleLogout}
-              className="px-4 py-3.5 flex-row items-center justify-between"
-            >
-              <View className="flex-row items-center flex-1">
-                <View className="bg-accent-cyan/20 rounded-full p-2 mr-3">
-                  <Ionicons name="log-out" size={18} color="#00F5D4" />
+              <TouchableOpacity
+                onPress={() => setPasswordModalVisible(true)}
+                className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary"
+              >
+                <View className="flex-row items-center flex-1">
+                  <View className="bg-accent-cyan/20 rounded-full p-2 mr-3">
+                    <Ionicons name="lock-closed" size={18} color="#00F5D4" />
+                  </View>
+                  <Text className="text-txt-primary text-base">
+                    Change Password
+                  </Text>
                 </View>
-                <Text className="text-accent-cyan text-base">Logout</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#00F5D4" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Goals & Targets Section */}
-        <View className="mt-6">
-          <Text className="text-txt-secondary text-md font-semibold uppercase mb-2 px-4">
-            Goals & Targets
-          </Text>
-          <View className="bg-bg-secondary rounded-2xl overflow-hidden">
-            {/* Monthly Target */}
-            <TouchableOpacity
-              onPress={editMonthlyTarget}
-              className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary"
-            >
-              <View className="flex-1">
-                <Text className="text-txt-primary text-base mb-0.5">
-                  Monthly Profit Target
-                </Text>
-                <Text className="text-txt-tertiary text-xs">
-                  Your monthly goal
-                </Text>
-              </View>
-              <View className="flex-row items-center">
-                <Text className="text-accent-cyan text-base font-semibold mr-2">
-                  ${settings.monthly_target.toLocaleString()}
-                </Text>
                 <Ionicons name="chevron-forward" size={20} color="#8B95A5" />
-              </View>
-            </TouchableOpacity>
+              </TouchableOpacity>
 
-            {/* Max Daily Loss */}
-            <TouchableOpacity
-              onPress={editMaxDailyLoss}
-              className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary"
-            >
-              <View className="flex-1">
-                <Text className="text-txt-primary text-base mb-0.5">
-                  Max Daily Loss
-                </Text>
-                <Text className="text-txt-tertiary text-xs">
-                  Maximum loss per day
-                </Text>
-              </View>
-              <View className="flex-row items-center">
-                <Text className="text-error text-base font-semibold mr-2">
-                  ${settings.max_daily_loss.toLocaleString()}
-                </Text>
-                <Ionicons name="chevron-forward" size={20} color="#8B95A5" />
-              </View>
-            </TouchableOpacity>
-
-            {/* Win Rate Goal */}
-            <TouchableOpacity
-              onPress={editWinRateGoal}
-              className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary"
-            >
-              <View className="flex-1">
-                <Text className="text-txt-primary text-base mb-0.5">
-                  Win Rate Goal
-                </Text>
-                <Text className="text-txt-tertiary text-xs">
-                  Target percentage
-                </Text>
-              </View>
-              <View className="flex-row items-center">
-                <Text className="text-accent-cyan text-base font-semibold mr-2">
-                  {settings.win_rate_goal}%
-                </Text>
-                <Ionicons name="chevron-forward" size={20} color="#8B95A5" />
-              </View>
-            </TouchableOpacity>
-
-            {/* Max Trades Per Day */}
-            <TouchableOpacity
-              onPress={editMaxTradesPerDay}
-              className="px-4 py-3.5 flex-row items-center justify-between"
-            >
-              <View className="flex-1">
-                <Text className="text-txt-primary text-base mb-0.5">
-                  Max Trades Per Day
-                </Text>
-                <Text className="text-txt-tertiary text-xs">Daily limit</Text>
-              </View>
-              <View className="flex-row items-center">
-                <Text className="text-txt-primary text-base font-semibold mr-2">
-                  {settings.max_trades_per_day}
-                </Text>
-                <Ionicons name="chevron-forward" size={20} color="#8B95A5" />
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Notifications Section */}
-        <View className="mt-6">
-          <Text className="text-txt-secondary text-md font-semibold uppercase mb-2 px-4">
-            Notifications
-          </Text>
-          <View className="bg-bg-secondary rounded-2xl overflow-hidden">
-            {/* Daily Reminder */}
-            <View className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary">
-              <View className="flex-1 mr-3">
-                <Text className="text-txt-primary text-base mb-0.5">
-                  Daily Reminder
-                </Text>
-                <Text className="text-txt-tertiary text-xs">
-                  Log trades at {settings.daily_reminder_time}
-                </Text>
-              </View>
-              <Switch
-                value={settings.daily_reminder_enabled}
-                onValueChange={toggleDailyReminder}
-                trackColor={{ false: "#3A4F64", true: "#00F5D4" }}
-                thumbColor="#fff"
-                ios_backgroundColor="#3A4F64"
-              />
-            </View>
-
-            {/* Inactivity Reminder */}
-            <View className="px-4 py-3.5 flex-row items-center justify-between">
-              <View className="flex-1 mr-3">
-                <Text className="text-txt-primary text-base mb-0.5">
-                  Inactivity Alert
-                </Text>
-                <Text className="text-txt-tertiary text-xs">
-                  After {settings.inactivity_days} days inactive
-                </Text>
-              </View>
-              <Switch
-                value={settings.inactivity_reminder_enabled}
-                onValueChange={toggleInactivityReminder}
-                trackColor={{ false: "#3A4F64", true: "#00F5D4" }}
-                thumbColor="#fff"
-                ios_backgroundColor="#3A4F64"
-              />
+              <TouchableOpacity
+                onPress={handleLogout}
+                className="px-4 py-3.5 flex-row items-center justify-between"
+              >
+                <View className="flex-row items-center flex-1">
+                  <View className="bg-accent-cyan/20 rounded-full p-2 mr-3">
+                    <Ionicons name="log-out" size={18} color="#00F5D4" />
+                  </View>
+                  <Text className="text-accent-cyan text-base">Logout</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#00F5D4" />
+              </TouchableOpacity>
             </View>
           </View>
-        </View>
 
-        {/* Data Management Section */}
-        <View className="mt-6">
-          <Text className="text-txt-secondary text-md font-semibold uppercase mb-2 px-4">
-            Data & Privacy
-          </Text>
-          <View className="bg-bg-secondary rounded-2xl overflow-hidden">
-            {/* Delete All Trades */}
-            <TouchableOpacity
-              onPress={handleDeleteAllTrades}
-              className="px-4 py-3.5 flex-row items-center justify-between"
-            >
-              <View className="flex-row items-center flex-1">
-                <View className="bg-error/20 rounded-full p-2 mr-3">
-                  <Ionicons name="trash" size={18} color="#EF4444" />
+          {/* Goals & Targets Section */}
+          <View className="mt-6">
+            <Text className="text-txt-secondary text-md font-semibold uppercase mb-2 px-4">
+              Goals & Targets
+            </Text>
+            <View className="bg-bg-secondary rounded-2xl overflow-hidden">
+              <TouchableOpacity
+                onPress={() =>
+                  openInputModal(
+                    "monthly_target",
+                    "Monthly Profit Target ($)",
+                    settings.monthly_target.toString(),
+                  )
+                }
+                className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary"
+              >
+                <View className="flex-1">
+                  <Text className="text-txt-primary text-base mb-0.5">
+                    Monthly Profit Target
+                  </Text>
+                  <Text className="text-txt-tertiary text-xs">
+                    Your monthly goal
+                  </Text>
                 </View>
-                <Text className="text-error text-base">Delete All Trades</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#EF4444" />
-            </TouchableOpacity>
+                <View className="flex-row items-center">
+                  <Text className="text-accent-cyan text-base font-semibold mr-2">
+                    ${settings.monthly_target.toLocaleString()}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={20} color="#8B95A5" />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() =>
+                  openInputModal(
+                    "max_daily_loss",
+                    "Max Daily Loss ($)",
+                    settings.max_daily_loss.toString(),
+                  )
+                }
+                className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary"
+              >
+                <View className="flex-1">
+                  <Text className="text-txt-primary text-base mb-0.5">
+                    Max Daily Loss
+                  </Text>
+                  <Text className="text-txt-tertiary text-xs">
+                    Maximum loss per day
+                  </Text>
+                </View>
+                <View className="flex-row items-center">
+                  <Text className="text-error text-base font-semibold mr-2">
+                    ${settings.max_daily_loss.toLocaleString()}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={20} color="#8B95A5" />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() =>
+                  openInputModal(
+                    "win_rate_goal",
+                    "Win Rate Goal (%)",
+                    settings.win_rate_goal.toString(),
+                  )
+                }
+                className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary"
+              >
+                <View className="flex-1">
+                  <Text className="text-txt-primary text-base mb-0.5">
+                    Win Rate Goal
+                  </Text>
+                  <Text className="text-txt-tertiary text-xs">
+                    Target percentage
+                  </Text>
+                </View>
+                <View className="flex-row items-center">
+                  <Text className="text-accent-cyan text-base font-semibold mr-2">
+                    {settings.win_rate_goal}%
+                  </Text>
+                  <Ionicons name="chevron-forward" size={20} color="#8B95A5" />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() =>
+                  openInputModal(
+                    "max_trades_per_day",
+                    "Max Trades Per Day",
+                    settings.max_trades_per_day.toString(),
+                  )
+                }
+                className="px-4 py-3.5 flex-row items-center justify-between"
+              >
+                <View className="flex-1">
+                  <Text className="text-txt-primary text-base mb-0.5">
+                    Max Trades Per Day
+                  </Text>
+                  <Text className="text-txt-tertiary text-xs">Daily limit</Text>
+                </View>
+                <View className="flex-row items-center">
+                  <Text className="text-txt-primary text-base font-semibold mr-2">
+                    {settings.max_trades_per_day}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={20} color="#8B95A5" />
+                </View>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
 
-        {/* Support & About Section */}
-        <View className="mt-6">
-          <Text className="text-txt-secondary text-md font-semibold uppercase mb-2 px-4">
-            Support & Legal
-          </Text>
-          <View className="bg-bg-secondary rounded-2xl overflow-hidden">
-            {/* Contact Support */}
-            <TouchableOpacity
-              onPress={handleContactSupport}
-              className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary"
-            >
-              <View className="flex-row items-center flex-1">
-                <View className="bg-info/20 rounded-full p-2 mr-3">
-                  <Ionicons name="mail" size={18} color="#3B82F6" />
+          {/* Notifications Section */}
+          <View className="mt-6">
+            <Text className="text-txt-secondary text-md font-semibold uppercase mb-2 px-4">
+              Notifications
+            </Text>
+            <View className="bg-bg-secondary rounded-2xl overflow-hidden">
+              <View className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary">
+                <View className="flex-1 mr-3">
+                  <Text className="text-txt-primary text-base mb-0.5">
+                    Daily Reminder
+                  </Text>
+                  <Text className="text-txt-tertiary text-xs">
+                    Log trades at {settings.daily_reminder_time}
+                  </Text>
                 </View>
-                <Text className="text-txt-primary text-base">
-                  Contact Support
-                </Text>
+                <Switch
+                  value={settings.daily_reminder_enabled}
+                  onValueChange={toggleDailyReminder}
+                  trackColor={{ false: "#3A4F64", true: "#00F5D4" }}
+                  thumbColor="#fff"
+                  ios_backgroundColor="#3A4F64"
+                />
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#8B95A5" />
-            </TouchableOpacity>
 
-            {/* Privacy Policy */}
-            <TouchableOpacity
-              onPress={handlePrivacyPolicy}
-              className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary"
-            >
-              <View className="flex-row items-center flex-1">
-                <View className="bg-info/20 rounded-full p-2 mr-3">
-                  <Ionicons name="shield-checkmark" size={18} color="#3B82F6" />
+              <View className="px-4 py-3.5 flex-row items-center justify-between">
+                <View className="flex-1 mr-3">
+                  <Text className="text-txt-primary text-base mb-0.5">
+                    Inactivity Alert
+                  </Text>
+                  <Text className="text-txt-tertiary text-xs">
+                    After {settings.inactivity_days} days inactive
+                  </Text>
                 </View>
-                <Text className="text-txt-primary text-base">
-                  Privacy Policy
-                </Text>
+                <Switch
+                  value={settings.inactivity_reminder_enabled}
+                  onValueChange={toggleInactivityReminder}
+                  trackColor={{ false: "#3A4F64", true: "#00F5D4" }}
+                  thumbColor="#fff"
+                  ios_backgroundColor="#3A4F64"
+                />
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#8B95A5" />
-            </TouchableOpacity>
+            </View>
+          </View>
 
-            {/* Terms of Service */}
-            <TouchableOpacity
-              onPress={handleTermsOfService}
-              className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary"
-            >
-              <View className="flex-row items-center flex-1">
-                <View className="bg-info/20 rounded-full p-2 mr-3">
-                  <Ionicons name="document-text" size={18} color="#3B82F6" />
+          {/* Data Management Section */}
+          <View className="mt-6">
+            <Text className="text-txt-secondary text-md font-semibold uppercase mb-2 px-4">
+              Data & Privacy
+            </Text>
+            <View className="bg-bg-secondary rounded-2xl overflow-hidden">
+              <TouchableOpacity
+                onPress={handleDeleteAllTrades}
+                className="px-4 py-3.5 flex-row items-center justify-between"
+              >
+                <View className="flex-row items-center flex-1">
+                  <View className="bg-error/20 rounded-full p-2 mr-3">
+                    <Ionicons name="trash" size={18} color="#EF4444" />
+                  </View>
+                  <Text className="text-error text-base">
+                    Delete All Trades
+                  </Text>
                 </View>
-                <Text className="text-txt-primary text-base">
-                  Terms of Service
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#8B95A5" />
-            </TouchableOpacity>
+                <Ionicons name="chevron-forward" size={20} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+          </View>
 
-            {/* App Version */}
-            <View className="px-4 py-3.5 flex-row items-center justify-between">
-              <Text className="text-txt-secondary text-base">App Version</Text>
-              <Text className="text-txt-tertiary text-base">1.0.0</Text>
+          {/* Support & About Section */}
+          <View className="mt-6">
+            <Text className="text-txt-secondary text-md font-semibold uppercase mb-2 px-4">
+              Support & Legal
+            </Text>
+            <View className="bg-bg-secondary rounded-2xl overflow-hidden">
+              <TouchableOpacity
+                onPress={handleContactSupport}
+                className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary"
+              >
+                <View className="flex-row items-center flex-1">
+                  <View className="bg-info/20 rounded-full p-2 mr-3">
+                    <Ionicons name="mail" size={18} color="#3B82F6" />
+                  </View>
+                  <Text className="text-txt-primary text-base">
+                    Contact Support
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#8B95A5" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handlePrivacyPolicy}
+                className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary"
+              >
+                <View className="flex-row items-center flex-1">
+                  <View className="bg-info/20 rounded-full p-2 mr-3">
+                    <Ionicons
+                      name="shield-checkmark"
+                      size={18}
+                      color="#3B82F6"
+                    />
+                  </View>
+                  <Text className="text-txt-primary text-base">
+                    Privacy Policy
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#8B95A5" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleTermsOfService}
+                className="px-4 py-3.5 flex-row items-center justify-between border-b border-bg-primary"
+              >
+                <View className="flex-row items-center flex-1">
+                  <View className="bg-info/20 rounded-full p-2 mr-3">
+                    <Ionicons name="document-text" size={18} color="#3B82F6" />
+                  </View>
+                  <Text className="text-txt-primary text-base">
+                    Terms of Service
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#8B95A5" />
+              </TouchableOpacity>
+
+              <View className="px-4 py-3.5 flex-row items-center justify-between">
+                <Text className="text-txt-secondary text-base">
+                  App Version
+                </Text>
+                <Text className="text-txt-tertiary text-base">1.0.0</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Danger Zone */}
+          <View className="mt-6">
+            <Text className="text-txt-secondary text-md font-semibold uppercase mb-2 px-4">
+              Danger Zone
+            </Text>
+            <View className="bg-bg-secondary rounded-2xl overflow-hidden">
+              <TouchableOpacity
+                onPress={handleDeleteAccount}
+                className="px-4 py-3.5 flex-row items-center justify-between"
+              >
+                <View className="flex-row items-center flex-1">
+                  <View className="bg-error/20 rounded-full p-2 mr-3">
+                    <Ionicons name="warning" size={18} color="#EF4444" />
+                  </View>
+                  <Text className="text-error text-base">Delete Account</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#EF4444" />
+              </TouchableOpacity>
             </View>
           </View>
         </View>
+      </ScrollView>
 
-        {/* Danger Zone */}
-        <View className="mt-6">
-          <Text className="text-txt-secondary text-md font-semibold uppercase mb-2 px-4">
-            Danger Zone
-          </Text>
-          <View className="bg-bg-secondary rounded-2xl overflow-hidden">
-            <TouchableOpacity
-              onPress={handleDeleteAccount}
-              className="px-4 py-3.5 flex-row items-center justify-between"
-            >
-              <View className="flex-row items-center flex-1">
-                <View className="bg-error/20 rounded-full p-2 mr-3">
-                  <Ionicons name="warning" size={18} color="#EF4444" />
-                </View>
-                <Text className="text-error text-base">Delete Account</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#EF4444" />
-            </TouchableOpacity>
+      {/* Password Change Modal */}
+      <Modal
+        visible={passwordModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPasswordModalVisible(false)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/50 px-6">
+          <View className="bg-bg-secondary rounded-2xl p-6 w-full max-w-md">
+            <Text className="text-txt-primary text-xl font-bold mb-4">
+              Change Password
+            </Text>
+
+            <Text className="text-txt-secondary text-sm mb-2">
+              Current Password
+            </Text>
+            <TextInput
+              placeholder="Enter current password"
+              placeholderTextColor="#8B95A5"
+              secureTextEntry
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              className="bg-bg-primary text-txt-primary rounded-lg px-4 py-3 mb-4 border border-border"
+            />
+
+            <Text className="text-txt-secondary text-sm mb-2">
+              New Password
+            </Text>
+            <TextInput
+              placeholder="Enter new password (min 6 chars)"
+              placeholderTextColor="#8B95A5"
+              secureTextEntry
+              value={newPasswordInput}
+              onChangeText={setNewPasswordInput}
+              className="bg-bg-primary text-txt-primary rounded-lg px-4 py-3 mb-4 border border-border"
+            />
+
+            <Text className="text-txt-secondary text-sm mb-2">
+              Confirm Password
+            </Text>
+            <TextInput
+              placeholder="Re-enter new password"
+              placeholderTextColor="#8B95A5"
+              secureTextEntry
+              value={confirmPasswordInput}
+              onChangeText={setConfirmPasswordInput}
+              className="bg-bg-primary text-txt-primary rounded-lg px-4 py-3 mb-6 border border-border"
+            />
+
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                onPress={() => {
+                  setPasswordModalVisible(false);
+                  setCurrentPassword("");
+                  setNewPasswordInput("");
+                  setConfirmPasswordInput("");
+                }}
+                className="flex-1 bg-bg-primary rounded-lg py-3"
+              >
+                <Text className="text-txt-secondary text-center font-semibold">
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={submitPasswordChange}
+                className="flex-1 bg-accent-cyan rounded-lg py-3"
+              >
+                <Text className="text-bg-primary text-center font-semibold">
+                  Change
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
-    </ScrollView>
+      </Modal>
+
+      {/* Generic Input Modal */}
+      <Modal
+        visible={inputModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setInputModalVisible(false)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/50 px-6">
+          <View className="bg-bg-secondary rounded-2xl p-6 w-full max-w-md">
+            <Text className="text-txt-primary text-xl font-bold mb-4">
+              {inputModalTitle}
+            </Text>
+
+            <TextInput
+              placeholder="Enter value"
+              placeholderTextColor="#8B95A5"
+              keyboardType={
+                inputModalType === "max_trades_per_day"
+                  ? "number-pad"
+                  : "numeric"
+              }
+              value={inputModalValue}
+              onChangeText={setInputModalValue}
+              className="bg-bg-primary text-txt-primary rounded-lg px-4 py-3 mb-6 border border-border"
+              autoFocus
+            />
+
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                onPress={() => {
+                  setInputModalVisible(false);
+                  setInputModalValue("");
+                }}
+                className="flex-1 bg-bg-primary rounded-lg py-3"
+              >
+                <Text className="text-txt-secondary text-center font-semibold">
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleInputModalSubmit}
+                className="flex-1 bg-accent-cyan rounded-lg py-3"
+              >
+                <Text className="text-bg-primary text-center font-semibold">
+                  Save
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
