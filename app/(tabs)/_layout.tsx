@@ -17,10 +17,8 @@ export default function TabsLayout() {
           borderRadius: 24,
           marginHorizontal: 16,
           marginBottom: Platform.OS === "ios" ? 20 : 16,
-          height: 70,
-          // ✅ DODAJ OVO - safe area padding za Android
-          paddingBottom:
-            Platform.OS === "android" ? Math.max(insets.bottom, 10) : 10,
+          height: 60 + insets.bottom, // ← Dodaj bottom inset
+          paddingBottom: insets.bottom,
           paddingTop: 10,
           elevation: 0,
           shadowColor: "#000",

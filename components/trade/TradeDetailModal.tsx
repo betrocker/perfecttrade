@@ -20,6 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface TradeDetailModalProps {
   visible: boolean;
@@ -56,6 +57,9 @@ export default function TradeDetailModal({
   onDelete,
   onUpdate,
 }: TradeDetailModalProps) {
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+
   const [activeTab, setActiveTab] = useState<TabType>("update");
   const [tradeOutcome, setTradeOutcome] = useState<
     "Win" | "Loss" | "Break-Even"
@@ -114,15 +118,15 @@ export default function TradeDetailModal({
 
       if (error) throw error;
 
-      // ✅ DODAJ OVO - Send trade result notification
+      // Send trade result notification
       const isWin = finalProfit > 0;
       await notificationService.sendTradeResultNotification(
         Math.abs(finalProfit),
         trade.currency_pair,
-        isWin
+        isWin,
       );
 
-      // ✅ DODAJ OVO - Check goals and send warnings if needed
+      // Check goals and send warnings if needed
       if (user) {
         await notificationService.checkGoalsAndNotify(user.id);
 
@@ -131,7 +135,7 @@ export default function TradeDetailModal({
         if (progress && progress.monthlyProgress >= progress.monthlyTarget) {
           await notificationService.sendMonthlyGoalAchievement(
             progress.monthlyProgress,
-            progress.monthlyTarget
+            progress.monthlyTarget,
           );
         }
       }
@@ -274,11 +278,9 @@ export default function TradeDetailModal({
             onClose();
           },
         },
-      ]
+      ],
     );
   };
-
-  const { user } = useAuth();
 
   return (
     <Modal
@@ -454,13 +456,13 @@ export default function TradeDetailModal({
                             >
                               <Text className="text-md text-white">
                                 {getCurrencyFlag(
-                                  trade.currency_pair.split("/")[0]
+                                  trade.currency_pair.split("/")[0],
                                 )}
                                 /
                               </Text>
                               <Text className="text-md pr-4">
                                 {getCurrencyFlag(
-                                  trade.currency_pair.split("/")[1]
+                                  trade.currency_pair.split("/")[1],
                                 )}
                               </Text>
                             </View>
@@ -775,7 +777,7 @@ export default function TradeDetailModal({
                       {trade.confluence_data?.timestamp && (
                         <Text className="text-txt-tertiary text-xs mt-1">
                           {new Date(
-                            trade.confluence_data.timestamp
+                            trade.confluence_data.timestamp,
                           ).toLocaleString()}
                         </Text>
                       )}
@@ -786,11 +788,11 @@ export default function TradeDetailModal({
                   <View className="flex-row justify-center mb-4">
                     <View
                       className="px-4 py-2 rounded-full"
-                      style={{ backgroundColor: `${setupCategory.color}20` }} // Dynamic color
+                      style={{ backgroundColor: `${setupCategory.color}20` }}
                     >
                       <Text
                         className="font-bold"
-                        style={{ color: setupCategory.color }} // Dynamic color
+                        style={{ color: setupCategory.color }}
                       >
                         {setupCategory.label === "Weak Setup" && "❌"}
                         {setupCategory.label === "Below Standard" && "⚠️"}
@@ -839,7 +841,7 @@ export default function TradeDetailModal({
                               +{item.weight || 0}%
                             </Text>
                           </View>
-                        )
+                        ),
                       )}
                     </View>
                   ) : (
@@ -862,7 +864,10 @@ export default function TradeDetailModal({
 
             {/* Footer Buttons */}
             {activeTab === "update" && (
-              <View className="p-5 border-t border-border flex-row bg-bg-primary">
+              <View
+                className="p-5 border-t border-border flex-row bg-bg-primary"
+                style={{ paddingBottom: insets.bottom + 20 }}
+              >
                 <TouchableOpacity
                   onPress={onClose}
                   className="flex-1 bg-bg-tertiary rounded-xl py-4 mr-2"

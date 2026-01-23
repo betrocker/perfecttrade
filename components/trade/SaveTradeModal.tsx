@@ -15,8 +15,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context"; // ← DODAJ
 
-import { usePremium } from "@/context/PremiumContext"; // prilagodi putanju
+import { usePremium } from "@/context/PremiumContext";
 import { useRouter } from "expo-router";
 
 type SaveTradeModalProps = {
@@ -38,6 +39,7 @@ export default function SaveTradeModal({
 }: SaveTradeModalProps) {
   const router = useRouter();
   const { isPremium, loading: premiumLoading } = usePremium();
+  const insets = useSafeAreaInsets(); // ← DODAJ
 
   const [currencyPair, setCurrencyPair] = useState("");
   const [direction, setDirection] = useState<"LONG" | "SHORT">("LONG");
@@ -120,7 +122,7 @@ export default function SaveTradeModal({
       const microLots = Math.round(standardLots * 1000);
       return `${microLots} micro lots (${standardLots.toFixed(4)} lots)`;
     } else if (standardLots < 0.1) {
-      return `${(standardLots * 100).toFixed(2)} mini lots (${standardLots.toFixed(3)} lots)`;
+      return `${(standardLots * 100).toFixed(2)} mini lots (${standardLots.toFixed(3)} loops)`;
     } else if (standardLots < 1) {
       return `${standardLots.toFixed(3)} lots`;
     } else {
@@ -156,7 +158,7 @@ export default function SaveTradeModal({
       if (!permissionResult.granted) {
         Alert.alert(
           "Permission Required",
-          "Please allow access to your photos"
+          "Please allow access to your photos",
         );
         return;
       }
@@ -186,9 +188,7 @@ export default function SaveTradeModal({
       }
 
       const fileExt = imageUri.split(".").pop()?.toLowerCase() || "jpg";
-      const fileName = `${Date.now()}-${Math.random()
-        .toString(36)
-        .substring(7)}.${fileExt}`;
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
       const response = await fetch(imageUri);
@@ -228,7 +228,7 @@ export default function SaveTradeModal({
   };
 
   const getClosedTradesCountForUser = async (
-    userId: string
+    userId: string,
   ): Promise<number> => {
     const { count, error } = await supabase
       .from("trades")
@@ -241,7 +241,6 @@ export default function SaveTradeModal({
   };
 
   const handleSave = async () => {
-    // validacije
     if (!currencyPair) {
       Alert.alert("Error", "Please select a currency pair");
       return;
@@ -255,7 +254,6 @@ export default function SaveTradeModal({
       return;
     }
 
-    // premium status se još učitava
     if (premiumLoading) {
       Alert.alert("Please wait", "Checking subscription status...");
       return;
@@ -274,7 +272,6 @@ export default function SaveTradeModal({
         return;
       }
 
-      // FREE LIMIT gating
       if (!isPremium) {
         const closedCount = await getClosedTradesCountForUser(user.id);
         if (closedCount >= FREE_CLOSED_TRADES_LIMIT) {
@@ -290,7 +287,7 @@ export default function SaveTradeModal({
                   router.push("/paywall");
                 },
               },
-            ]
+            ],
           );
           return;
         }
@@ -303,7 +300,6 @@ export default function SaveTradeModal({
 
       const lotSize = calculateLotSize();
 
-      // koristi checkedItems
       const confluenceData = {
         score: confluenceScore,
         timestamp: new Date().toISOString(),
@@ -711,8 +707,11 @@ export default function SaveTradeModal({
               </View>
             </ScrollView>
 
-            {/* Footer Buttons */}
-            <View className="p-5 border-t border-border flex-row bg-bg-primary">
+            {/* Footer Buttons - DODAJ paddingBottom */}
+            <View
+              className="p-5 border-t border-border flex-row bg-bg-primary"
+              style={{ paddingBottom: insets.bottom + 20 }} // ← FIX
+            >
               <TouchableOpacity
                 onPress={onClose}
                 className="flex-1 bg-bg-tertiary rounded-xl py-4 mr-2"
