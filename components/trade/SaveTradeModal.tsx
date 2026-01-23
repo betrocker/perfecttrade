@@ -182,8 +182,15 @@ export default function SaveTradeModal({
         error: authError,
       } = await supabase.auth.getUser();
 
-      if (authError || !user) {
-        console.error("❌ Auth error or no user");
+      if (authError) {
+        console.error("❌ Auth error:", authError);
+        Alert.alert("Authentication Error", "Please log in again");
+        return null;
+      }
+
+      if (!user) {
+        console.error("❌ No user found");
+        Alert.alert("Authentication Error", "Please log in again");
         return null;
       }
 
@@ -219,10 +226,10 @@ export default function SaveTradeModal({
       const { data: urlData } = supabase.storage
         .from("trade-charts")
         .getPublicUrl(filePath);
-
       return urlData.publicUrl;
     } catch (error: any) {
       console.error("💥 Upload error:", error);
+      Alert.alert("Upload Error", "Failed to upload image. Please try again.");
       return null;
     }
   };
@@ -262,6 +269,23 @@ export default function SaveTradeModal({
     setSaving(true);
 
     try {
+      // ← REFRESH SESSION PRE SAVE-A
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
+
+      if (sessionError || !sessionData.session) {
+        console.error("❌ No valid session, refreshing...");
+        const { data: refreshData, error: refreshError } =
+          await supabase.auth.refreshSession();
+
+        if (refreshError || !refreshData.session) {
+          Alert.alert("Session Expired", "Please log out and log in again");
+          setSaving(false);
+          return;
+        }
+        console.log("✅ Session refreshed before save");
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -271,86 +295,6 @@ export default function SaveTradeModal({
         setSaving(false);
         return;
       }
-
-      if (!isPremium) {
-        const closedCount = await getClosedTradesCountForUser(user.id);
-        if (closedCount >= FREE_CLOSED_TRADES_LIMIT) {
-          Alert.alert(
-            "Premium required",
-            `Free plan supports up to ${FREE_CLOSED_TRADES_LIMIT} closed trades. Upgrade to Premium for unlimited trades.`,
-            [
-              { text: "Not now", style: "cancel" },
-              {
-                text: "Upgrade",
-                onPress: () => {
-                  onClose();
-                  router.push("/paywall");
-                },
-              },
-            ],
-          );
-          return;
-        }
-      }
-
-      let chartImageUrl = null;
-      if (chartImage) {
-        chartImageUrl = await uploadChartImage(chartImage);
-      }
-
-      const lotSize = calculateLotSize();
-
-      const confluenceData = {
-        score: confluenceScore,
-        timestamp: new Date().toISOString(),
-        items: checkedItems,
-      };
-
-      const { data: trade, error: tradeError } = await supabase
-        .from("trades")
-        .insert([
-          {
-            user_id: user.id,
-            currency_pair: currencyPair,
-            direction: direction,
-            account_balance: parseFloat(accountBalance),
-            stop_loss_pips: parseInt(stopLossPips),
-            risk_percentage: parseFloat(riskPercentage),
-            calculated_lot_size: lotSize,
-            entry_price: entryPrice ? parseFloat(entryPrice) : null,
-            stop_loss_price: stopLossPrice ? parseFloat(stopLossPrice) : null,
-            take_profit_price: takeProfitPrice
-              ? parseFloat(takeProfitPrice)
-              : null,
-            confluence_score: confluenceScore,
-            confluence_data: confluenceData,
-            notes: notes || null,
-            status: "PLANNED",
-            chart_image_url: chartImageUrl,
-          },
-        ])
-        .select()
-        .single();
-
-      if (tradeError) throw tradeError;
-
-      Alert.alert("Success!", "Your trade has been saved successfully.", [
-        {
-          text: "OK",
-          onPress: () => {
-            onClose();
-            setCurrencyPair("");
-            setDirection("LONG");
-            setStopLossPips("");
-            setRiskPercentage("2");
-            setEntryPrice("");
-            setStopLossPrice("");
-            setTakeProfitPrice("");
-            setNotes("");
-            setChartImage(null);
-          },
-        },
-      ]);
     } catch (error: any) {
       console.error("❌ Save error:", error);
       Alert.alert("Error", "Failed to save trade. Please try again.");

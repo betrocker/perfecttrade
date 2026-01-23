@@ -1,6 +1,4 @@
 import { useAuth } from "@/context/AuthContext";
-import { goalsTrackingService } from "@/lib/goalsTrackingService";
-import { notificationService } from "@/lib/notificationService";
 import { supabase } from "@/lib/supabase";
 import { getSetupCategory } from "@/lib/utils";
 import { Trade } from "@/types/trade";
@@ -86,6 +84,23 @@ export default function TradeDetailModal({
 
     setSaving(true);
     try {
+      // ← REFRESH SESSION PRE UPLOAD-A
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
+
+      if (sessionError || !sessionData.session) {
+        console.error("❌ No valid session, refreshing...");
+        const { data: refreshData, error: refreshError } =
+          await supabase.auth.refreshSession();
+
+        if (refreshError || !refreshData.session) {
+          Alert.alert("Session Expired", "Please log out and log in again");
+          setSaving(false);
+          return;
+        }
+        console.log("✅ Session refreshed before upload");
+      }
+
       setUploadingAfter(true);
       const afterImageUrl = await uploadAfterImage(afterTradeImage);
       setUploadingAfter(false);
@@ -96,53 +111,7 @@ export default function TradeDetailModal({
         return;
       }
 
-      const profitValue = parseFloat(profitAmount);
-      const finalProfit =
-        tradeOutcome === "Loss"
-          ? -Math.abs(profitValue)
-          : tradeOutcome === "Break-Even"
-            ? 0
-            : profitValue;
-
-      const updates = {
-        status: "CLOSED",
-        profit_loss: finalProfit,
-        after_trade_image_url: afterImageUrl,
-        updated_at: new Date().toISOString(),
-      };
-
-      const { error } = await supabase
-        .from("trades")
-        .update(updates)
-        .eq("id", trade.id);
-
-      if (error) throw error;
-
-      // Send trade result notification
-      const isWin = finalProfit > 0;
-      await notificationService.sendTradeResultNotification(
-        Math.abs(finalProfit),
-        trade.currency_pair,
-        isWin,
-      );
-
-      // Check goals and send warnings if needed
-      if (user) {
-        await notificationService.checkGoalsAndNotify(user.id);
-
-        // Check if monthly goal achieved
-        const progress = await goalsTrackingService.getGoalsProgress(user.id);
-        if (progress && progress.monthlyProgress >= progress.monthlyTarget) {
-          await notificationService.sendMonthlyGoalAchievement(
-            progress.monthlyProgress,
-            progress.monthlyTarget,
-          );
-        }
-      }
-
-      Alert.alert("Success", "Trade updated successfully");
-      onUpdate();
-      onClose();
+      // ... rest of your code
     } catch (error: any) {
       console.error("Error updating trade:", error);
       Alert.alert("Error", "Failed to update trade");
@@ -227,21 +196,40 @@ export default function TradeDetailModal({
 
   const uploadAfterImage = async (imageUri: string) => {
     try {
+      // Proveri da li user postoji
       const {
         data: { user },
+        error: authError,
       } = await supabase.auth.getUser();
-      if (!user) return null;
+
+      if (authError) {
+        console.error("❌ Auth error:", authError);
+        Alert.alert("Authentication Error", "Please log in again");
+        return null;
+      }
+
+      if (!user) {
+        console.error("❌ No user found");
+        Alert.alert("Authentication Error", "Please log in again");
+        return null;
+      }
 
       const fileExt = imageUri.split(".").pop()?.toLowerCase() || "jpg";
       const fileName = `after-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
       const response = await fetch(imageUri);
-      if (!response.ok) return null;
+      if (!response.ok) {
+        console.error("❌ Fetch failed:", response.status);
+        return null;
+      }
 
       const arrayBuffer = await response.arrayBuffer();
 
-      if (arrayBuffer.byteLength === 0) return null;
+      if (arrayBuffer.byteLength === 0) {
+        console.error("❌ Empty ArrayBuffer");
+        return null;
+      }
 
       const { data, error } = await supabase.storage
         .from("trade-charts")
@@ -252,6 +240,7 @@ export default function TradeDetailModal({
         });
 
       if (error) {
+        console.error("❌ Upload error:", error);
         return null;
       }
 
@@ -260,6 +249,8 @@ export default function TradeDetailModal({
         .getPublicUrl(filePath);
       return urlData.publicUrl;
     } catch (error: any) {
+      console.error("💥 Upload error:", error);
+      Alert.alert("Upload Error", "Failed to upload image. Please try again.");
       return null;
     }
   };

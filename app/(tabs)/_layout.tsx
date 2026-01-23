@@ -19,7 +19,7 @@ export default function TabsLayout() {
           marginBottom: Platform.OS === "ios" ? 20 : 16,
           height: 60 + insets.bottom, // ← Dodaj bottom inset
           paddingBottom: insets.bottom,
-          paddingTop: 10,
+          paddingTop: 4,
           elevation: 0,
           shadowColor: "#000",
           shadowOffset: {
