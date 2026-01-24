@@ -12,23 +12,24 @@ export default function TabsLayout() {
         headerShown: true,
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: "rgba(42, 63, 84, 0.9)",
+          backgroundColor: "rgba(42, 63, 84, 0.95)",
           borderTopWidth: 0,
           borderRadius: 24,
           marginHorizontal: 16,
-          marginBottom: Platform.OS === "ios" ? 20 : 16,
-          height: 60 + insets.bottom, // ← Dodaj bottom inset
-          paddingBottom: insets.bottom,
-          paddingTop: 4,
-          elevation: 0,
+          marginBottom: Platform.OS === "ios" ? 20 : insets.bottom + 20,
+          height: 70,
+          paddingBottom: 8,
+          paddingTop: 8,
+          elevation: 20,
           shadowColor: "#000",
-          shadowOffset: {
-            width: 0,
-            height: 4,
-          },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.8,
+          shadowRadius: 15,
+          // Dodaj fake senku sa border-om
+          borderWidth: Platform.OS === "android" ? 1 : 0,
+          borderColor: "rgba(0, 0, 0, 0.1)",
         },
+
         tabBarActiveTintColor: "#00F5D4",
         tabBarInactiveTintColor: "#8B95A5",
         headerStyle: {
